@@ -16,7 +16,17 @@ Signal hierarchy:
 import logging
 from typing import Optional
 
-from config.settings import PORTFOLIO_SETTINGS, SIGNAL_THRESHOLDS, TECHNICAL_SETTINGS
+from config.settings import (
+    PORTFOLIO_SETTINGS,
+    SECTOR_LABELS,
+    SIGNAL_THRESHOLDS,
+    TECHNICAL_SETTINGS,
+    TICKER_SECTORS,
+    VIX_THRESHOLDS,
+)
+
+# Combined sector map (watchlist + full universe)
+_SECTOR_MAP: dict[str, str] = {**TICKER_SECTORS, **SECTOR_LABELS}
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +112,7 @@ def generate_signal(score_result: dict, account_size: Optional[float] = None) ->
         "ticker": ticker,
         "signal": signal,
         "composite_score": composite,
+        "sector": _SECTOR_MAP.get(ticker, "Unknown"),
         "entry": round(entry, 2) if entry else None,
         "stop_loss": round(stop_loss, 2) if stop_loss else None,
         "target_1": round(target_1, 2) if target_1 else None,
@@ -112,6 +123,8 @@ def generate_signal(score_result: dict, account_size: Optional[float] = None) ->
         "rr_ratio": rr_ratio,
         "reasoning": reasoning,
         "indicators": indicators,
+        "earnings_warning": _check_earnings_warning(ticker),
+        "vix_adjusted": _check_vix_adjustment(),
     }
 
 
@@ -265,3 +278,75 @@ def _build_reasoning(
         parts.append(f"Risk/reward: {rr_ratio:.1f}:1.")
 
     return " ".join(parts)
+
+
+def _check_earnings_warning(ticker: str) -> bool:
+    """
+    Return True if earnings are expected within the next 7 days.
+
+    Uses yfinance calendar data.  Returns False gracefully on any failure.
+    """
+    try:
+        import yfinance as yf
+        from datetime import datetime, timedelta
+
+        try:
+            from config.settings import DATA_SETTINGS
+            warning_days = int(DATA_SETTINGS.get("earnings_warning_days", 7))
+        except Exception:
+            warning_days = 7
+
+        t = yf.Ticker(ticker)
+        cal = t.calendar
+        if cal is None:
+            return False
+        # calendar can be a dict or DataFrame depending on yfinance version
+        if hasattr(cal, "columns"):
+            # DataFrame
+            if "Earnings Date" in cal.columns:
+                dates = cal["Earnings Date"].dropna().tolist()
+            else:
+                return False
+        elif isinstance(cal, dict):
+            dates = cal.get("Earnings Date", [])
+            if not isinstance(dates, list):
+                dates = [dates]
+        else:
+            return False
+
+        now = datetime.now()
+        cutoff = now + timedelta(days=warning_days)
+        for d in dates:
+            try:
+                if hasattr(d, "to_pydatetime"):
+                    d = d.to_pydatetime()
+                if hasattr(d, "replace"):
+                    d = d.replace(tzinfo=None)
+                if now <= d <= cutoff:
+                    return True
+            except Exception:
+                continue
+    except Exception as exc:
+        logger.debug("Earnings check failed for %s: %s", ticker, exc)
+    return False
+
+
+def _check_vix_adjustment() -> str | None:
+    """
+    Return a position-size note when VIX is elevated, or None when calm.
+
+    Avoids a circular import by importing fetch_vix lazily.
+    """
+    try:
+        from src.data.market_data import fetch_vix
+        vix = fetch_vix()
+        if vix is None:
+            return None
+        if vix >= VIX_THRESHOLDS["high_fear"]:
+            return f"VIX {vix:.1f} — EXTREME FEAR: consider sitting out or reducing size by 75%."
+        if vix >= VIX_THRESHOLDS["elevated"]:
+            return f"VIX {vix:.1f} — ELEVATED: reduce position size by 50%."
+        return None
+    except Exception as exc:
+        logger.debug("VIX check failed: %s", exc)
+        return None

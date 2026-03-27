@@ -29,12 +29,63 @@ def _cache_path(ticker: str, period: str) -> Path:
     return CACHE_DIR / f"{ticker}_{period}.parquet"
 
 
+def _cache_ttl_minutes() -> int:
+    """
+    Return the appropriate cache TTL in minutes.
+
+    Uses a shorter TTL during market hours (15 min) to keep data fresh,
+    and a longer TTL outside market hours (60 min) to avoid unnecessary API calls.
+    """
+    if is_market_open():
+        return 15
+    return int(DATA_SETTINGS["cache_ttl_minutes"])
+
+
 def _is_cache_fresh(path: Path) -> bool:
-    """Return True if the cache file exists and is younger than TTL."""
+    """Return True if the cache file exists and is younger than the current TTL."""
     if not path.exists():
         return False
     age_minutes = (time.time() - path.stat().st_mtime) / 60
-    return age_minutes < DATA_SETTINGS["cache_ttl_minutes"]
+    return age_minutes < _cache_ttl_minutes()
+
+
+def is_market_open() -> bool:
+    """
+    Return True if the US equity market is currently open (Mon–Fri, 09:30–16:00 ET).
+
+    Requires Python 3.9+ (uses the standard library ``zoneinfo`` module).
+    Note: Does not account for market holidays.
+    """
+    try:
+        import zoneinfo
+        et = zoneinfo.ZoneInfo("America/New_York")
+        now_et = datetime.now(et)
+        if now_et.weekday() >= 5:  # Saturday or Sunday
+            return False
+        open_time = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+        close_time = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+        return open_time <= now_et <= close_time
+    except ImportError:
+        logger.debug("zoneinfo not available (Python < 3.9) — market hours check skipped")
+        return False
+    except Exception:
+        return False
+
+
+def fetch_vix() -> Optional[float]:
+    """
+    Return the current VIX level (CBOE Volatility Index).
+
+    Returns None if data is unavailable.
+    """
+    try:
+        df = fetch_ohlcv("^VIX", period="5d")
+        if df.empty:
+            return None
+        return float(df["Close"].iloc[-1])
+    except Exception as exc:
+        logger.error("Failed to fetch VIX: %s", exc)
+        return None
 
 
 # ---------------------------------------------------------------------------
