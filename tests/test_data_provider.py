@@ -149,23 +149,19 @@ class TestIsMarketOpen:
         self.dp = DataProvider()
 
     def test_weekday_market_hours_returns_true(self):
-        """Mock a Tuesday 10:00 AM ET."""
+        """Mock a Tuesday 10:00 AM ET — should return True."""
         import pytz
+        import datetime as _dt
         et = pytz.timezone("America/New_York")
-        # Use a known weekday + market hours datetime
-        with patch(
-            "src.data.data_provider.datetime"
-        ) as mock_dt:
-            mock_now = MagicMock()
-            mock_now.weekday.return_value = 1  # Tuesday
-            mock_now.time.return_value = __import__("datetime").time(10, 0)
-            mock_now.month = 6
-            mock_now.day = 15
+        mock_now = MagicMock()
+        mock_now.weekday.return_value = 1  # Tuesday
+        mock_now.time.return_value = _dt.time(10, 0)
+        mock_now.month = 6
+        mock_now.day = 15
+        with patch("src.data.data_provider.datetime") as mock_dt:
             mock_dt.now.return_value = mock_now
-            # Direct test — call real method using a known-open time
-        # Verify structure only — actual open/close depends on system time
-        result = self.dp.is_market_open()
-        assert isinstance(result, bool)
+            result = self.dp.is_market_open()
+        assert result is True
 
     def test_returns_bool(self):
         result = self.dp.is_market_open()

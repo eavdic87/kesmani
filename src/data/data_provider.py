@@ -20,12 +20,14 @@ logger = logging.getLogger(__name__)
 # US Eastern timezone
 _ET = pytz.timezone("America/New_York")
 
-# US market holidays (year-agnostic month/day pairs) — major NYSE holidays
+# US market holidays (year-agnostic month/day pairs) — fixed-date NYSE holidays only.
+# Floating holidays (MLK Day, Presidents' Day, Good Friday, Memorial Day,
+# Juneteenth, Labor Day, Thanksgiving) require year-aware calculation and are
+# not represented here. is_market_open() is approximate for those dates.
 _US_HOLIDAYS: set[tuple[int, int]] = {
     (1, 1),   # New Year's Day
     (7, 4),   # Independence Day
-    (12, 25), # Christmas
-    (11, 11), # Veterans Day (not a market holiday, kept for reference)
+    (12, 25), # Christmas Day
 }
 
 
