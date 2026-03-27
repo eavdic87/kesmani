@@ -1,5 +1,5 @@
 """
-Page 3: Stock Detail — Kesmani Dashboard
+Page 3: Stock Detail — KešMani Dashboard
 
 Interactive candlestick chart with all technical overlays,
 fundamentals sidebar, and signal summary.
@@ -23,9 +23,12 @@ from dashboard.components.charts import candlestick_chart
 from dashboard.components.metrics import signal_summary_card
 from config.settings import ALL_TICKERS, BENCHMARK_TICKERS, PORTFOLIO_SETTINGS
 
-st.set_page_config(page_title="Stock Detail | Kesmani", page_icon="📊", layout="wide")
+st.set_page_config(page_title="KešMani | Stock Detail", page_icon="📊", layout="wide")
 
-st.title("📊 Stock Detail")
+from dashboard.theme import apply_theme
+apply_theme()
+
+st.title("📊 Stock Detail — KešMani")
 
 # ---------------------------------------------------------------------------
 # Ticker selector

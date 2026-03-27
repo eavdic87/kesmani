@@ -1,5 +1,5 @@
 """
-Page 4: Portfolio — Kesmani Dashboard
+Page 4: Portfolio — KešMani Dashboard
 
 Position management, live P&L, risk heat gauge, position sizing calculator,
 and trade history.
@@ -30,9 +30,12 @@ from dashboard.components.tables import positions_table, closed_trades_table
 from dashboard.components.metrics import heat_gauge
 from config.settings import ALL_TICKERS, PORTFOLIO_SETTINGS
 
-st.set_page_config(page_title="Portfolio | Kesmani", page_icon="💼", layout="wide")
+st.set_page_config(page_title="KešMani | Portfolio", page_icon="💼", layout="wide")
 
-st.title("💼 Portfolio Tracker")
+from dashboard.theme import apply_theme
+apply_theme()
+
+st.title("💼 Portfolio Tracker — KešMani")
 
 # ---------------------------------------------------------------------------
 # Load portfolio

@@ -1,5 +1,5 @@
 """
-Page 5: Daily Report — Kesmani Dashboard
+Page 5: Daily Brief — KešMani Dashboard
 
 Renders the full daily morning briefing and provides a one-click
 email send button.
@@ -18,9 +18,12 @@ from src.reports.email_sender import send_report_email
 from config.settings import PORTFOLIO_SETTINGS
 from src.utils.helpers import fmt_currency, fmt_pct, signal_emoji
 
-st.set_page_config(page_title="Daily Report | Kesmani", page_icon="📋", layout="wide")
+st.set_page_config(page_title="KešMani | Daily Brief", page_icon="📋", layout="wide")
 
-st.title("📋 Daily Trading Brief")
+from dashboard.theme import apply_theme
+apply_theme()
+
+st.title("📋 Daily Trading Brief — KešMani")
 st.caption("Your personalised morning briefing with entry/stop/target recommendations")
 
 # ---------------------------------------------------------------------------

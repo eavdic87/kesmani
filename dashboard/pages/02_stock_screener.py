@@ -1,5 +1,5 @@
 """
-Page 2: Stock Screener — Kesmani Dashboard
+Page 2: Stock Screener — KešMani Dashboard
 
 Displays the scored watchlist with composite signals, filtering, and sorting.
 """
@@ -18,9 +18,12 @@ from src.utils.helpers import fmt_currency, fmt_pct, signal_emoji
 from dashboard.components.tables import screener_table
 from config.settings import ALL_TICKERS, BENCHMARK_TICKERS, PORTFOLIO_SETTINGS, TICKER_SECTORS
 
-st.set_page_config(page_title="Stock Screener | Kesmani", page_icon="🔍", layout="wide")
+st.set_page_config(page_title="KešMani | Stock Screener", page_icon="🔍", layout="wide")
 
-st.title("🔍 Stock Screener")
+from dashboard.theme import apply_theme
+apply_theme()
+
+st.title("🔍 Stock Screener — KešMani")
 st.caption("Composite-scored watchlist with BUY/SELL/HOLD signals")
 
 # ---------------------------------------------------------------------------
