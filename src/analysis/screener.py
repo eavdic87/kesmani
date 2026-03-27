@@ -1,5 +1,5 @@
 """
-Stock screening engine for Kesmani.
+Stock screening engine for KešMani.
 
 Scores each ticker on a composite 0–100 scale across five dimensions:
   - Trend (25%)        : MA alignment, price position

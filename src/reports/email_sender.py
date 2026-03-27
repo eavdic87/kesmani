@@ -1,5 +1,5 @@
 """
-Email sender for Kesmani.
+Email sender for KešMani.
 
 Sends the HTML daily report via SMTP.  Supports Gmail app passwords
 and any standard SMTP provider.

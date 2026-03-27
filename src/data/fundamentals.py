@@ -1,5 +1,5 @@
 """
-Fundamentals fetching module for Kesmani.
+Fundamentals fetching module for KešMani.
 
 Pulls P/E, forward P/E, PEG, earnings growth, revenue growth, profit
 margins, market cap, and dividend yield via yfinance's info dictionary.

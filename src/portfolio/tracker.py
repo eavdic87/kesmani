@@ -1,5 +1,5 @@
 """
-Portfolio tracker for Kesmani.
+Portfolio tracker for KešMani.
 
 Persists open positions to data/portfolio.json and provides
 CRUD operations plus live P&L calculations.

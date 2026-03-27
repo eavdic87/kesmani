@@ -1,5 +1,5 @@
 """
-Market scanner module for Kesmani.
+Market scanner module for KešMani.
 
 Scans the full FULL_UNIVERSE of 200+ tickers, ranks them by composite
 score, and provides filtering by sector, signal type, price range,

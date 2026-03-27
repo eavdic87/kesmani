@@ -1,5 +1,5 @@
 """
-Email delivery configuration for the Kesmani Trading Intelligence System.
+Email delivery configuration for the KešMani Trading Intelligence System.
 
 Reads all credentials from environment variables so no secrets are ever
 committed to source control.  Copy .env.example → .env and fill in your

@@ -1,5 +1,5 @@
 """
-Reusable styled data table components for the Kesmani dashboard.
+Reusable styled data table components for the KešMani dashboard.
 """
 
 from typing import Optional

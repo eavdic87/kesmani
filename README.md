@@ -1,11 +1,11 @@
-# 📈 Kesmani — Trading Intelligence System
+# 📈 KešMani — Trading Intelligence System
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
 ![Streamlit](https://img.shields.io/badge/Dashboard-Streamlit-red)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Data](https://img.shields.io/badge/Data-yfinance%20%28free%29-yellow)
 
-> **Kesmani** is a professional-grade, Python-based trading intelligence platform that automatically fetches market data, runs technical and fundamental analysis, and delivers actionable trading recommendations via a **Streamlit web dashboard** and **automated email reports** — no paid API keys required.
+> **KešMani** is a professional-grade, Python-based trading intelligence platform that automatically fetches market data, runs technical and fundamental analysis, and delivers actionable trading recommendations via a **Streamlit web dashboard** and **automated email reports** — no paid API keys required.
 
 ---
 
@@ -205,7 +205,7 @@ Tests use synthetic data — no network calls or API keys required.
 
 ## ⚠️ Disclaimer
 
-**Kesmani is a trading intelligence tool, not financial advice.**
+**KešMani is a trading intelligence tool, not financial advice.**
 
 - All trading carries significant risk of loss
 - Past performance does not guarantee future results

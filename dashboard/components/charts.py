@@ -1,5 +1,5 @@
 """
-Reusable chart components for the Kesmani dashboard.
+Reusable chart components for the KešMani dashboard.
 
 All functions return Plotly figures configured for the dark trading theme.
 """

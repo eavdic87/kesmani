@@ -1,5 +1,5 @@
 """
-Page 7: Execution Planner — Kesmani Dashboard
+Page 7: Execution Planner — KešMani Dashboard
 
 Dedicated page for generating and reviewing a complete trade execution
 plan for any stock.  Covers order type, limit price, position sizing,
@@ -20,29 +20,13 @@ from config.settings import ALL_TICKERS, FULL_UNIVERSE, PORTFOLIO_SETTINGS
 from src.utils.helpers import fmt_currency, fmt_pct, signal_color, signal_emoji
 
 st.set_page_config(
-    page_title="Execution Planner | Kesmani",
+    page_title="KešMani | Execution Planner",
     page_icon="🎯",
     layout="wide",
 )
 
-# ---------------------------------------------------------------------------
-# CSS
-# ---------------------------------------------------------------------------
-st.markdown(
-    """
-    <style>
-    .stApp { background-color: #0d1117; color: #c9d1d9; }
-    [data-testid="stSidebar"] { background-color: #161b22; }
-    div[data-testid="metric-container"] {
-        background-color: #161b22;
-        border: 1px solid #30363d;
-        border-radius: 8px;
-        padding: 12px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+from dashboard.theme import apply_theme
+apply_theme()
 
 # ---------------------------------------------------------------------------
 # Sidebar — stock selection & account size
@@ -82,7 +66,7 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Title
 # ---------------------------------------------------------------------------
-st.title("🎯 Trade Execution Planner")
+st.title("🎯 Trade Execution Planner — KešMani")
 st.caption(
     "Enter a ticker and account size to receive a complete, VP-level execution guide. "
     "Covers order type, limit price, broker steps, risk management, and warnings."

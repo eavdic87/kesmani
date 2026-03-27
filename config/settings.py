@@ -1,5 +1,5 @@
 """
-Central configuration for the Kesmani Trading Intelligence System.
+Central configuration for the KešMani Trading Intelligence System.
 
 All tunable parameters live here — change these to adapt the system
 to your own risk tolerance, universe, and thresholds.
@@ -7,6 +7,8 @@ to your own risk tolerance, universe, and thresholds.
 
 import os
 from pathlib import Path
+
+ACCOUNT_SIZE = float(os.getenv("ACCOUNT_SIZE", "5000"))
 
 # ---------------------------------------------------------------------------
 # Project paths
@@ -215,7 +217,7 @@ TIMING_WINDOWS: dict[str, dict[str, int]] = {
 # Portfolio settings
 # ---------------------------------------------------------------------------
 PORTFOLIO_SETTINGS: dict[str, float | int] = {
-    "starting_capital": float(os.getenv("STARTING_CAPITAL", "1000")),
+    "starting_capital": float(os.getenv("STARTING_CAPITAL", "5000")),
     "max_risk_per_trade": 0.02,   # 2 % of total capital per trade
     "max_portfolio_heat": 0.08,   # 8 % maximum aggregate open risk
     "default_rr_ratio": 2.0,      # minimum reward-to-risk ratio for setups
@@ -270,3 +272,5 @@ DATA_SETTINGS: dict[str, str | int] = {
     "cache_ttl_minutes": 60,       # file-cache TTL in minutes
     "earnings_warning_days": 7,    # flag upcoming earnings within N days
 }
+
+DATA_STALENESS_MINUTES = 30

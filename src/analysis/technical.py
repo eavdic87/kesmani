@@ -1,5 +1,5 @@
 """
-Technical analysis engine for Kesmani.
+Technical analysis engine for KešMani.
 
 Calculates all standard indicators used by the screening and signal
 modules.  All functions accept a pandas DataFrame (OHLCV) and return

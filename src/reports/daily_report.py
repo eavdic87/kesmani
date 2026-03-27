@@ -1,5 +1,5 @@
 """
-Daily report generator for Kesmani.
+Daily report generator for KešMani.
 
 Produces a comprehensive morning briefing in three formats:
   1. Plain text   — for terminal output / logging

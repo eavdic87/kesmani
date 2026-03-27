@@ -1,5 +1,5 @@
 """
-Page 6: Market Scanner — Kesmani Dashboard
+Page 6: Market Scanner — KešMani Dashboard
 
 Full-market scanner that covers 200+ tickers across all sectors.
 Filters by sector, signal type, score, and price range.
@@ -19,36 +19,13 @@ from config.settings import PORTFOLIO_SETTINGS, SCAN_UNIVERSE, SECTOR_LABELS, TI
 from src.utils.helpers import fmt_currency, fmt_pct, signal_color, signal_emoji
 
 st.set_page_config(
-    page_title="Market Scanner | Kesmani",
+    page_title="KešMani | Market Scanner",
     page_icon="🔎",
     layout="wide",
 )
 
-# ---------------------------------------------------------------------------
-# CSS
-# ---------------------------------------------------------------------------
-st.markdown(
-    """
-    <style>
-    .stApp { background-color: #0d1117; color: #c9d1d9; }
-    [data-testid="stSidebar"] { background-color: #161b22; }
-    div[data-testid="metric-container"] {
-        background-color: #161b22;
-        border: 1px solid #30363d;
-        border-radius: 8px;
-        padding: 12px;
-    }
-    .signal-badge {
-        display: inline-block;
-        padding: 2px 10px;
-        border-radius: 12px;
-        font-weight: bold;
-        font-size: 0.85em;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+from dashboard.theme import apply_theme
+apply_theme()
 
 # ---------------------------------------------------------------------------
 # Sidebar filters
@@ -101,8 +78,8 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Title
 # ---------------------------------------------------------------------------
-st.title("🔎 Full Market Scanner")
-st.caption("Real-time scan of 200+ tickers across all sectors. Powered by Kesmani.")
+st.title("🔎 Full Market Scanner — KešMani")
+st.caption("Real-time scan of 200+ tickers across all sectors. Powered by KešMani.")
 
 # ---------------------------------------------------------------------------
 # Run scan

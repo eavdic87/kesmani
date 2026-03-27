@@ -1,95 +1,95 @@
 """
-Kesmani Trading Intelligence System — Main Streamlit Application.
+KešMani Trading Intelligence System — Main Streamlit Application.
 
 Run with:
     streamlit run dashboard/app.py
 
-The dashboard uses a dark trading terminal theme with a sidebar for
-navigation.  Each page is a separate module in dashboard/pages/.
+The dashboard uses a modern card-based design with light/dark mode toggle.
+Each page is a separate module in dashboard/pages/.
 """
 
 import sys
 from datetime import datetime
 from pathlib import Path
 
-# Ensure project root is on the Python path so all imports resolve correctly
 ROOT = Path(__file__).parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import streamlit as st
 from src.utils.helpers import setup_logging
+from dashboard.theme import apply_theme, market_status_html
 
-# Configure logging once at app startup
 setup_logging()
 
 # ---------------------------------------------------------------------------
 # Page config (must be first Streamlit call)
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Kesmani | Trading Intelligence",
+    page_title="KešMani | Trading Intelligence",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------------------------
-# Global dark-theme CSS
+# Session state defaults
 # ---------------------------------------------------------------------------
-st.markdown(
-    """
-    <style>
-    /* Dark trading terminal theme */
-    .stApp { background-color: #0d1117; color: #c9d1d9; }
-    .css-1d391kg { background-color: #161b22; }
-    [data-testid="stSidebar"] { background-color: #161b22; }
-    [data-testid="stSidebar"] .stMarkdown h1,
-    [data-testid="stSidebar"] .stMarkdown h2,
-    [data-testid="stSidebar"] .stMarkdown p { color: #c9d1d9; }
-    .stMetric label { color: #8b949e !important; }
-    .stMetric .metric-container { background: #161b22; border-radius: 8px; padding: 10px; }
-    div[data-testid="metric-container"] { background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px; }
-    .stDataFrame { border: 1px solid #30363d; }
-    .stSelectbox > div { background-color: #161b22; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+if "dark_mode" not in st.session_state:
+    st.session_state["dark_mode"] = False
+if "account_size" not in st.session_state:
+    from config.settings import ACCOUNT_SIZE
+    st.session_state["account_size"] = ACCOUNT_SIZE
+
+# Apply active theme CSS
+apply_theme()
 
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("## 📈 Kesmani")
-    st.markdown("**Trading Intelligence System**")
+    st.markdown(
+        "<h2 style='margin-bottom:0;'>📈 KešMani</h2>"
+        "<p style='margin-top:0;font-size:0.8rem;opacity:0.7;'>Trading Intelligence</p>",
+        unsafe_allow_html=True,
+    )
     st.markdown("---")
 
-    # Persistent account size input
-    from config.settings import PORTFOLIO_SETTINGS
+    # Dark/Light mode toggle
+    dark = st.toggle("🌙 Dark Mode", value=st.session_state["dark_mode"], key="_dm_toggle")
+    if dark != st.session_state["dark_mode"]:
+        st.session_state["dark_mode"] = dark
+        st.rerun()
+
+    st.markdown("---")
+
+    # Account size input
+    from config.settings import ACCOUNT_SIZE
     account_size = st.number_input(
         "💰 Account Size ($)",
         min_value=100.0,
-        value=float(st.session_state.get("account_size", PORTFOLIO_SETTINGS["starting_capital"])),
+        value=float(st.session_state.get("account_size", ACCOUNT_SIZE)),
         step=100.0,
         key="sidebar_account_size",
     )
     st.session_state["account_size"] = account_size
 
     st.markdown("---")
-    st.markdown(
-        """
-        **Navigation**
-        Use the pages listed below to explore the dashboard.
 
-        - 🌍 Market Overview
-        - 🔍 Stock Screener
-        - 📊 Stock Detail
-        - 💼 Portfolio
-        - 📋 Daily Report
-        - 🔎 Market Scanner *(new)*
-        - 🎯 Execution Planner *(new)*
-        """
-    )
+    # Market status
+    try:
+        from src.data.data_provider import get_provider
+        is_open = get_provider().is_market_open()
+    except Exception:
+        is_open = False
+    st.markdown(market_status_html(is_open), unsafe_allow_html=True)
+
+    # Last refresh
+    last_ts = st.session_state.get("last_refresh_ts")
+    if last_ts:
+        ts_str = datetime.fromtimestamp(last_ts).strftime("%H:%M:%S")
+        st.caption(f"🕐 Last scan: {ts_str}")
+
     st.markdown("---")
 
     # Auto-refresh toggle
@@ -107,37 +107,95 @@ with st.sidebar:
             st.session_state["last_refresh_ts"] = _time.time()
             st.rerun()
 
-    # Last refresh timestamp
-    last_ts = st.session_state.get("last_refresh_ts")
-    if last_ts:
-        ts_str = datetime.fromtimestamp(last_ts).strftime("%H:%M:%S")
-        st.caption(f"Last refresh: {ts_str}")
-
+    st.markdown("---")
     st.caption("⚠️ For informational purposes only. Not financial advice.")
 
 # ---------------------------------------------------------------------------
 # Home page content
 # ---------------------------------------------------------------------------
-st.title("📈 Kesmani Trading Intelligence System")
+st.markdown(
+    "<h1 style='font-size:2.5rem;margin-bottom:0;'>📈 KešMani</h1>"
+    "<p style='font-size:1.1rem;opacity:0.7;margin-top:4px;'>Trading Intelligence System</p>",
+    unsafe_allow_html=True,
+)
+st.markdown("---")
+
+# Quick navigation cards
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown(
+        """
+        <div class="km-card">
+        <h3>🌍 Market Overview</h3>
+        <p>Market regime, benchmark performance, sector rotation heatmap, and breadth analysis.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with col2:
+    st.markdown(
+        """
+        <div class="km-card">
+        <h3>🎯 Trade Recommendations</h3>
+        <p>VP-level trade setups with entry, stop, targets, and step-by-step execution guides.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with col3:
+    st.markdown(
+        """
+        <div class="km-card">
+        <h3>🔎 Market Scanner</h3>
+        <p>Full 200+ ticker universe scan with sector, signal, and score filtering.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+col4, col5, col6 = st.columns(3)
+
+with col4:
+    st.markdown(
+        """
+        <div class="km-card">
+        <h3>📊 Stock Detail</h3>
+        <p>Candlestick charts, RSI, MACD, Bollinger Bands, and signal analysis for any ticker.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with col5:
+    st.markdown(
+        """
+        <div class="km-card">
+        <h3>💼 Portfolio Monitor</h3>
+        <p>Live P&amp;L tracking, stop/target alerts, trailing stops, and portfolio heat gauge.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with col6:
+    st.markdown(
+        """
+        <div class="km-card">
+        <h3>📋 Daily Brief</h3>
+        <p>Auto-generated morning report with market regime, top picks, and key levels to watch.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.markdown("---")
 st.markdown(
     """
-    Welcome to **Kesmani** — your personal AI-powered trading intelligence platform.
-
-    Use the **sidebar navigation** to explore:
-
-    | Page | Description |
-    |---|---|
-    | 🌍 Market Overview | Live market regime, index performance, sector rotation |
-    | 🔍 Stock Screener | Composite-scored watchlist with BUY/SELL/HOLD signals |
-    | 📊 Stock Detail | Candlestick charts, indicators, entry/stop/target levels |
-    | 💼 Portfolio | Position tracker, P&L, risk heat gauge |
-    | 📋 Daily Report | Full morning briefing with one-click email delivery |
-    | 🔎 Market Scanner | **NEW** — Scan 200+ tickers across all sectors in real time |
-    | 🎯 Execution Planner | **NEW** — Full VP-level trade execution guide with broker steps |
-
-    ---
-
-    > ⚠️ **Disclaimer:** Kesmani is a trading tool, not financial advice.
+    > ⚠️ **Disclaimer:** KešMani is a trading intelligence tool, not financial advice.
     > All trading carries risk. Never risk more than you can afford to lose.
+    > Always do your own research before entering any trade.
     """
 )
