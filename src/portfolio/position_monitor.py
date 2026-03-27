@@ -302,9 +302,10 @@ def update_trailing_stops(scan_results: list[dict]) -> list[dict]:
         trailing_pct = 0.05
         new_stop = round(current_price * (1 - trailing_pct), 2)
         if new_stop > pos["trailing_stop"]:
+            old_stop = pos["trailing_stop"]
             pos["trailing_stop"] = new_stop
             updated = True
-            logger.info("Updated trailing stop for %s: $%.2f → $%.2f", ticker, pos["trailing_stop"], new_stop)
+            logger.info("Updated trailing stop for %s: $%.2f → $%.2f", ticker, old_stop, new_stop)
 
     if updated:
         save_positions(positions)
