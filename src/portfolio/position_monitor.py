@@ -7,7 +7,7 @@ and persists state to data/positions.json.
 
 import json
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -124,7 +124,7 @@ def add_position(
         "status": "open",
         "target_1_hit": False,
         "notes": notes,
-        "added_at": datetime.utcnow().isoformat(),
+        "added_at": datetime.now(timezone.utc).isoformat(),
     }
 
     positions.append(new_pos)
@@ -151,7 +151,7 @@ def remove_position(ticker: str) -> bool:
     for pos in positions:
         if pos["ticker"] == ticker and pos["status"] == "open":
             pos["status"] = "closed"
-            pos["closed_at"] = datetime.utcnow().isoformat()
+            pos["closed_at"] = datetime.now(timezone.utc).isoformat()
             found = True
     if found:
         save_positions(positions)
