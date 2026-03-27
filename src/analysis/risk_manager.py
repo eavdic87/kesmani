@@ -1,5 +1,5 @@
 """
-Risk management module for Kesmani.
+Risk management module for KešMani.
 
 Handles:
   - Position sizing based on fixed-fractional (1-2 % account risk)

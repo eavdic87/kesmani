@@ -1,5 +1,5 @@
 """
-Trade execution guide for Kesmani.
+Trade execution guide for KešMani.
 
 Translates a trading signal into a complete, step-by-step execution
 plan that a VP-level trader would follow.  The plan covers:

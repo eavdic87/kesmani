@@ -1,5 +1,5 @@
 """
-News & catalyst module for Kesmani.
+News & catalyst module for KešMani.
 
 Fetches upcoming earnings dates for watchlist stocks via yfinance's
 calendar features and maintains a static economic calendar with

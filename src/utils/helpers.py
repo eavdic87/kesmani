@@ -1,5 +1,5 @@
 """
-Common utilities for the Kesmani Trading Intelligence System.
+Common utilities for the KešMani Trading Intelligence System.
 
 Provides:
   - Logging setup

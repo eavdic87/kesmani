@@ -1,5 +1,5 @@
 """
-KPI metric card components for the Kesmani dashboard.
+KPI metric card components for the KešMani dashboard.
 """
 
 import streamlit as st

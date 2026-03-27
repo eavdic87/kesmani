@@ -1,5 +1,5 @@
 """
-Signal generation module for Kesmani.
+Signal generation module for KešMani.
 
 Translates composite screener scores and technical indicators into
 clear, actionable trading signals with entry, stop-loss, and target

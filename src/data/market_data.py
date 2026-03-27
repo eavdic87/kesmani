@@ -1,5 +1,5 @@
 """
-Market data fetching module for Kesmani.
+Market data fetching module for KešMani.
 
 Fetches OHLCV data via yfinance with intelligent file-based caching
 to avoid hammering the API on every run.  All public functions return
