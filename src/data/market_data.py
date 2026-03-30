@@ -6,10 +6,10 @@ to avoid hammering the API on every run.  All public functions return
 pandas DataFrames or dicts — never raw yfinance objects.
 """
 
-import json
 import logging
 import time
-from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -19,6 +19,36 @@ import yfinance as yf
 from config.settings import ALL_TICKERS, CACHE_DIR, DATA_SETTINGS
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# US market holiday list (NYSE/NASDAQ) — updated for 2025 and 2026
+# ---------------------------------------------------------------------------
+_US_MARKET_HOLIDAYS: frozenset[date] = frozenset(
+    [
+        # 2025
+        date(2025, 1, 1),   # New Year's Day
+        date(2025, 1, 20),  # MLK Day
+        date(2025, 2, 17),  # Presidents' Day
+        date(2025, 4, 18),  # Good Friday
+        date(2025, 5, 26),  # Memorial Day
+        date(2025, 6, 19),  # Juneteenth
+        date(2025, 7, 4),   # Independence Day
+        date(2025, 9, 1),   # Labor Day
+        date(2025, 11, 27), # Thanksgiving
+        date(2025, 12, 25), # Christmas
+        # 2026
+        date(2026, 1, 1),   # New Year's Day
+        date(2026, 1, 19),  # MLK Day
+        date(2026, 2, 16),  # Presidents' Day
+        date(2026, 4, 3),   # Good Friday
+        date(2026, 5, 25),  # Memorial Day
+        date(2026, 6, 19),  # Juneteenth
+        date(2026, 7, 3),   # Independence Day (observed)
+        date(2026, 9, 7),   # Labor Day
+        date(2026, 11, 26), # Thanksgiving
+        date(2026, 12, 25), # Christmas
+    ]
+)
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -54,13 +84,15 @@ def is_market_open() -> bool:
     Return True if the US equity market is currently open (Mon–Fri, 09:30–16:00 ET).
 
     Requires Python 3.9+ (uses the standard library ``zoneinfo`` module).
-    Note: Does not account for market holidays.
+    Accounts for US market holidays for 2025–2026.
     """
     try:
         import zoneinfo
         et = zoneinfo.ZoneInfo("America/New_York")
         now_et = datetime.now(et)
         if now_et.weekday() >= 5:  # Saturday or Sunday
+            return False
+        if now_et.date() in _US_MARKET_HOLIDAYS:
             return False
         open_time = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
         close_time = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
@@ -137,9 +169,10 @@ def fetch_ohlcv(ticker: str, period: str = DATA_SETTINGS["default_period"]) -> p
 def fetch_all_ohlcv(
     tickers: list[str] | None = None,
     period: str = DATA_SETTINGS["default_period"],
+    max_workers: int = 10,
 ) -> dict[str, pd.DataFrame]:
     """
-    Fetch OHLCV data for multiple tickers.
+    Fetch OHLCV data for multiple tickers in parallel.
 
     Parameters
     ----------
@@ -147,6 +180,8 @@ def fetch_all_ohlcv(
         List of ticker symbols.  Defaults to ALL_TICKERS.
     period:
         yfinance period string.
+    max_workers:
+        Number of parallel threads (default 10).
 
     Returns
     -------
@@ -154,8 +189,21 @@ def fetch_all_ohlcv(
     """
     tickers = tickers or ALL_TICKERS
     result: dict[str, pd.DataFrame] = {}
-    for ticker in tickers:
-        result[ticker] = fetch_ohlcv(ticker, period)
+
+    def _fetch(ticker: str) -> tuple[str, pd.DataFrame]:
+        return ticker, fetch_ohlcv(ticker, period)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_fetch, t): t for t in tickers}
+        for future in as_completed(futures):
+            ticker = futures[future]
+            try:
+                t, df = future.result()
+                result[t] = df
+            except Exception as exc:
+                logger.error("Parallel fetch failed for %s: %s", ticker, exc)
+                result[ticker] = pd.DataFrame()
+
     return result
 
 
@@ -208,4 +256,47 @@ def get_market_snapshot(benchmarks: list[str] | None = None) -> list[dict]:
     from config.settings import BENCHMARK_TICKERS
 
     benchmarks = benchmarks or BENCHMARK_TICKERS
-    return [get_price_summary(t) for t in benchmarks if get_price_summary(t)]
+    snapshots = [get_price_summary(t) for t in benchmarks]
+    return [s for s in snapshots if s]
+
+
+def fetch_extended_hours(ticker: str) -> dict | None:
+    """
+    Fetch pre-market and after-hours price data for a ticker.
+
+    Uses yfinance's ``prepost=True`` flag on a short 5d history call.
+
+    Returns
+    -------
+    Dict with keys: pre_market_price, after_hours_price, regular_close,
+    or None if data is unavailable.
+    """
+    try:
+        ticker_obj = yf.Ticker(ticker)
+        df = ticker_obj.history(period="5d", prepost=True, auto_adjust=True)
+        if df.empty:
+            return None
+
+        regular_df = ticker_obj.history(period="5d", auto_adjust=True)
+        regular_close = float(regular_df["Close"].iloc[-1]) if not regular_df.empty else None
+
+        last_ts = df.index[-1]
+        last_price = float(df["Close"].iloc[-1])
+
+        result: dict = {"regular_close": regular_close, "pre_market_price": None, "after_hours_price": None}
+        try:
+            import zoneinfo
+            et = zoneinfo.ZoneInfo("America/New_York")
+            last_et = last_ts.tz_convert(et) if last_ts.tzinfo else last_ts
+            hour = last_et.hour
+            if 4 <= hour < 9:
+                result["pre_market_price"] = last_price
+            elif 16 <= hour < 20:
+                result["after_hours_price"] = last_price
+        except Exception:
+            pass
+
+        return result
+    except Exception as exc:
+        logger.error("Extended hours fetch failed for %s: %s", ticker, exc)
+        return None

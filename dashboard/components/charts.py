@@ -1,10 +1,12 @@
 """
 Reusable chart components for the KešMani dashboard.
 
-All functions return Plotly figures configured for the dark trading theme.
+All functions return Plotly figures.  Charts automatically adapt their
+color theme to the active Streamlit dark/light mode via ``get_chart_layout()``.
 """
 
 from typing import Optional
+import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -19,18 +21,102 @@ from src.analysis.technical import (
 
 
 # ---------------------------------------------------------------------------
-# Shared theme
+# Theme-aware layout
 # ---------------------------------------------------------------------------
 
-DARK_LAYOUT = dict(
+_DARK_COLORS = dict(
     paper_bgcolor="#0d1117",
     plot_bgcolor="#0d1117",
-    font=dict(color="#c9d1d9"),
-    xaxis=dict(gridcolor="#30363d", showgrid=True),
-    yaxis=dict(gridcolor="#30363d", showgrid=True),
-    legend=dict(bgcolor="#161b22", bordercolor="#30363d"),
+    font_color="#c9d1d9",
+    grid_color="#30363d",
+    legend_bgcolor="#161b22",
+    legend_bordercolor="#30363d",
+    candle_up="#00cc44",
+    candle_down="#cc0000",
+)
+
+_LIGHT_COLORS = dict(
+    paper_bgcolor="#FFFFFF",
+    plot_bgcolor="#F8F9FA",
+    font_color="#212529",
+    grid_color="#DEE2E6",
+    legend_bgcolor="#F8F9FA",
+    legend_bordercolor="#DEE2E6",
+    candle_up="#10B981",
+    candle_down="#EF4444",
+)
+
+# Keep DARK_LAYOUT for backward compatibility
+DARK_LAYOUT = dict(
+    paper_bgcolor=_DARK_COLORS["paper_bgcolor"],
+    plot_bgcolor=_DARK_COLORS["plot_bgcolor"],
+    font=dict(color=_DARK_COLORS["font_color"]),
+    xaxis=dict(gridcolor=_DARK_COLORS["grid_color"], showgrid=True),
+    yaxis=dict(gridcolor=_DARK_COLORS["grid_color"], showgrid=True),
+    legend=dict(bgcolor=_DARK_COLORS["legend_bgcolor"], bordercolor=_DARK_COLORS["legend_bordercolor"]),
     margin=dict(l=50, r=20, t=40, b=40),
 )
+
+
+def get_chart_layout() -> dict:
+    """
+    Return a Plotly layout dict that matches the current Streamlit theme.
+
+    Uses dark colors when ``st.session_state.dark_mode`` is True.
+    """
+    is_dark = st.session_state.get("dark_mode", False)
+    c = _DARK_COLORS if is_dark else _LIGHT_COLORS
+    return dict(
+        paper_bgcolor=c["paper_bgcolor"],
+        plot_bgcolor=c["plot_bgcolor"],
+        font=dict(color=c["font_color"]),
+        xaxis=dict(gridcolor=c["grid_color"], showgrid=True),
+        yaxis=dict(gridcolor=c["grid_color"], showgrid=True),
+        legend=dict(bgcolor=c["legend_bgcolor"], bordercolor=c["legend_bordercolor"]),
+        margin=dict(l=50, r=20, t=40, b=40),
+    )
+
+
+def _candle_colors() -> tuple[str, str]:
+    """Return (up_color, down_color) for the active theme."""
+    is_dark = st.session_state.get("dark_mode", False)
+    c = _DARK_COLORS if is_dark else _LIGHT_COLORS
+    return c["candle_up"], c["candle_down"]
+
+
+# ---------------------------------------------------------------------------
+# Timeframe slicing
+# ---------------------------------------------------------------------------
+
+_TIMEFRAME_BARS: dict[str, int] = {
+    "1W": 5,
+    "1M": 21,
+    "3M": 63,
+    "6M": 126,
+    "1Y": 252,
+    "All": 0,
+}
+
+
+def slice_dataframe(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
+    """
+    Slice a DataFrame to the last N bars for a given timeframe label.
+
+    Parameters
+    ----------
+    df:
+        Full OHLCV DataFrame.
+    timeframe:
+        One of "1W", "1M", "3M", "6M", "1Y", "All".
+
+    Returns
+    -------
+    Sliced DataFrame (or the full DataFrame when timeframe=="All").
+    """
+    bars = _TIMEFRAME_BARS.get(timeframe, 0)
+    if bars == 0 or len(df) <= bars:
+        return df
+    return df.tail(bars)
 
 
 def candlestick_chart(
@@ -42,6 +128,7 @@ def candlestick_chart(
     show_volume: bool = True,
     show_rsi: bool = True,
     show_macd: bool = True,
+    timeframe: str = "All",
 ) -> go.Figure:
     """
     Build a full-featured candlestick chart with optional overlays.
@@ -54,11 +141,16 @@ def candlestick_chart(
         Symbol label for the chart title.
     show_sma, show_ema, show_bollinger, show_volume, show_rsi, show_macd:
         Toggle individual chart elements.
+    timeframe:
+        Slice data to this timeframe before charting.
+        One of "1W", "1M", "3M", "6M", "1Y", "All".
 
     Returns
     -------
     Plotly Figure with subplots: [OHLCV + overlays, Volume, RSI, MACD].
     """
+    df = slice_dataframe(df, timeframe)
+
     n_rows = 1 + int(show_volume) + int(show_rsi) + int(show_macd)
     row_heights = [0.5]
     if show_volume:
@@ -82,6 +174,7 @@ def candlestick_chart(
     close = df["Close"]
     dates = df.index
     current_row = 1
+    up_color, down_color = _candle_colors()
 
     # --- Candlestick ---
     fig.add_trace(
@@ -92,8 +185,8 @@ def candlestick_chart(
             low=df["Low"],
             close=close,
             name=ticker,
-            increasing_line_color="#00cc44",
-            decreasing_line_color="#cc0000",
+            increasing_line_color=up_color,
+            decreasing_line_color=down_color,
         ),
         row=1,
         col=1,
@@ -141,7 +234,7 @@ def candlestick_chart(
     if show_volume:
         current_row += 1
         colors = [
-            "#00cc44" if c >= o else "#cc0000"
+            up_color if c >= o else down_color
             for c, o in zip(df["Close"], df["Open"])
         ]
         fig.add_trace(
@@ -158,8 +251,8 @@ def candlestick_chart(
             go.Scatter(x=dates, y=rsi, name="RSI", line=dict(color="#58a6ff", width=1.5)),
             row=current_row, col=1,
         )
-        fig.add_hline(y=70, line_dash="dash", line_color="#cc0000", line_width=1, row=current_row, col=1)
-        fig.add_hline(y=30, line_dash="dash", line_color="#00cc44", line_width=1, row=current_row, col=1)
+        fig.add_hline(y=70, line_dash="dash", line_color=down_color, line_width=1, row=current_row, col=1)
+        fig.add_hline(y=30, line_dash="dash", line_color=up_color, line_width=1, row=current_row, col=1)
         fig.update_yaxes(title_text="RSI", range=[0, 100], row=current_row, col=1)
 
     # --- MACD ---
@@ -169,7 +262,7 @@ def candlestick_chart(
         macd_line = macd_data["macd"]
         signal_line = macd_data["signal"]
         histogram = macd_data["histogram"]
-        hist_colors = ["#00cc44" if v >= 0 else "#cc0000" for v in histogram]
+        hist_colors = [up_color if v >= 0 else down_color for v in histogram]
         fig.add_trace(
             go.Bar(x=dates, y=histogram, name="MACD Hist", marker_color=hist_colors, opacity=0.7),
             row=current_row, col=1,
@@ -185,10 +278,11 @@ def candlestick_chart(
         fig.update_yaxes(title_text="MACD", row=current_row, col=1)
 
     # --- Layout ---
+    layout = get_chart_layout()
     fig.update_layout(
-        title=f"{ticker} — Price Chart",
+        title=f"{ticker} — Price Chart ({timeframe})",
         xaxis_rangeslider_visible=False,
-        **DARK_LAYOUT,
+        **layout,
         height=700,
     )
 
@@ -197,6 +291,7 @@ def candlestick_chart(
 
 def sparkline(series: pd.Series, color: str = "#58a6ff") -> go.Figure:
     """Create a compact sparkline figure."""
+    layout = get_chart_layout()
     fig = go.Figure(
         go.Scatter(
             x=list(range(len(series))),
@@ -224,13 +319,43 @@ def portfolio_pie(positions: list[dict]) -> go.Figure:
         return go.Figure()
     labels = [p["ticker"] for p in positions]
     values = [p.get("market_value", p.get("cost_basis", 0)) for p in positions]
+    layout = get_chart_layout()
     fig = go.Figure(
         go.Pie(
             labels=labels,
             values=values,
             hole=0.4,
-            marker=dict(line=dict(color="#0d1117", width=2)),
+            marker=dict(line=dict(color=layout["paper_bgcolor"], width=2)),
         )
     )
-    fig.update_layout(title="Portfolio Allocation", **DARK_LAYOUT, height=350)
+    fig.update_layout(title="Portfolio Allocation", **layout, height=350)
+    return fig
+
+
+def sector_bar_chart(sector_data: list[dict]) -> go.Figure:
+    """
+    Bar chart showing portfolio sector concentration.
+
+    Parameters
+    ----------
+    sector_data:
+        List of dicts with keys: sector, pct (percentage of portfolio value).
+
+    Returns
+    -------
+    Plotly Figure.
+    """
+    if not sector_data:
+        return go.Figure()
+    layout = get_chart_layout()
+    sectors = [d["sector"] for d in sector_data]
+    pcts = [d["pct"] for d in sector_data]
+    colors = ["#3B82F6" if p < 25 else "#F59E0B" if p < 40 else "#EF4444" for p in pcts]
+    fig = go.Figure(go.Bar(x=sectors, y=pcts, marker_color=colors))
+    fig.update_layout(
+        title="Sector Concentration (%)",
+        yaxis_title="% of Portfolio",
+        **layout,
+        height=300,
+    )
     return fig

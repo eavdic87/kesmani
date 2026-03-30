@@ -204,9 +204,10 @@ def volume_ratio(volume: pd.Series, avg_period: int = 20) -> float:
 
 def calculate_support_resistance(df: pd.DataFrame, window: int = 20) -> dict[str, float]:
     """
-    Identify key support and resistance levels using recent pivot points.
+    Identify key support and resistance levels using rolling pivot detection.
 
     A pivot high is a local maximum; a pivot low is a local minimum.
+    Uses vectorized rolling operations instead of an O(n²) loop.
 
     Returns
     -------
@@ -221,14 +222,15 @@ def calculate_support_resistance(df: pd.DataFrame, window: int = 20) -> dict[str
     low = df["Low"]
     current_price = float(close.iloc[-1])
 
-    pivot_highs: list[float] = []
-    pivot_lows: list[float] = []
+    # Vectorized pivot detection using rolling windows
+    rolling_high_max = high.rolling(window=window * 2 + 1, center=True, min_periods=window).max()
+    rolling_low_min = low.rolling(window=window * 2 + 1, center=True, min_periods=window).min()
 
-    for i in range(window, len(df) - window):
-        if float(high.iloc[i]) == float(high.iloc[i - window : i + window].max()):
-            pivot_highs.append(float(high.iloc[i]))
-        if float(low.iloc[i]) == float(low.iloc[i - window : i + window].min()):
-            pivot_lows.append(float(low.iloc[i]))
+    pivot_high_mask = high == rolling_high_max
+    pivot_low_mask = low == rolling_low_min
+
+    pivot_highs: list[float] = high[pivot_high_mask].tolist()
+    pivot_lows: list[float] = low[pivot_low_mask].tolist()
 
     resistance_levels = sorted([p for p in pivot_highs if p > current_price])
     support_levels = sorted([p for p in pivot_lows if p < current_price], reverse=True)
@@ -240,6 +242,113 @@ def calculate_support_resistance(df: pd.DataFrame, window: int = 20) -> dict[str
         "all_resistance": resistance_levels[:3],
         "all_support": support_levels[:3],
     }
+
+
+# ---------------------------------------------------------------------------
+# Stochastic RSI
+# ---------------------------------------------------------------------------
+
+def calculate_stoch_rsi(
+    close: pd.Series,
+    period: int = 14,
+    smooth_k: int = 3,
+    smooth_d: int = 3,
+) -> dict[str, pd.Series]:
+    """
+    Calculate Stochastic RSI (%K and %D lines).
+
+    Parameters
+    ----------
+    close:
+        Series of closing prices.
+    period:
+        RSI look-back window (default 14).
+    smooth_k:
+        Smoothing period for %K (default 3).
+    smooth_d:
+        Smoothing period for %D (default 3).
+
+    Returns
+    -------
+    Dict with keys: stoch_k, stoch_d — both series in [0, 100].
+    """
+    rsi = calculate_rsi(close, period)
+    rsi_min = rsi.rolling(window=period, min_periods=1).min()
+    rsi_max = rsi.rolling(window=period, min_periods=1).max()
+    rsi_range = rsi_max - rsi_min
+    stoch_k_raw = 100 * (rsi - rsi_min) / rsi_range.replace(0, np.nan)
+    stoch_k = stoch_k_raw.rolling(window=smooth_k, min_periods=1).mean()
+    stoch_d = stoch_k.rolling(window=smooth_d, min_periods=1).mean()
+    return {"stoch_k": stoch_k, "stoch_d": stoch_d}
+
+
+# ---------------------------------------------------------------------------
+# On-Balance Volume (OBV)
+# ---------------------------------------------------------------------------
+
+def calculate_obv(close: pd.Series, volume: pd.Series) -> pd.Series:
+    """
+    Calculate On-Balance Volume (OBV).
+
+    OBV is a running total of volume that adds volume on up-days and
+    subtracts volume on down-days.  It is a trend-confirmation indicator.
+
+    Parameters
+    ----------
+    close:
+        Series of closing prices.
+    volume:
+        Series of trading volume.
+
+    Returns
+    -------
+    OBV series.
+    """
+    direction = close.diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    obv = (direction * volume).fillna(0).cumsum()
+    return obv
+
+
+# ---------------------------------------------------------------------------
+# Relative Strength vs benchmark
+# ---------------------------------------------------------------------------
+
+def calculate_relative_strength(
+    close: pd.Series,
+    benchmark_close: pd.Series,
+    period: int = 90,
+) -> float:
+    """
+    Calculate relative strength of a ticker vs a benchmark (e.g. SPY).
+
+    Computes the ratio of the ticker's return over ``period`` bars vs
+    the benchmark return over the same period, then normalises to 0–100.
+
+    Parameters
+    ----------
+    close:
+        Closing prices for the ticker.
+    benchmark_close:
+        Closing prices for the benchmark (must share the same date index).
+    period:
+        Look-back window in trading days (default 90).
+
+    Returns
+    -------
+    RS Rating in [0, 100].  50 = in-line with benchmark.
+    """
+    if len(close) < period or len(benchmark_close) < period:
+        return 50.0
+    try:
+        ticker_return = (float(close.iloc[-1]) / float(close.iloc[-period]) - 1) * 100
+        bench_return = (float(benchmark_close.iloc[-1]) / float(benchmark_close.iloc[-period]) - 1) * 100
+        # Relative return: positive = outperforming
+        rel_return = ticker_return - bench_return
+        # Normalise to 0–100: clamp at ±50% relative return
+        clamped = max(-50.0, min(50.0, rel_return))
+        return round(50.0 + clamped, 2)
+    except Exception:
+        return 50.0
 
 
 # ---------------------------------------------------------------------------
@@ -277,7 +386,7 @@ def determine_trend(close: pd.Series, sma_values: dict[str, float]) -> str:
 # Master indicator calculator
 # ---------------------------------------------------------------------------
 
-def compute_all_indicators(df: pd.DataFrame) -> dict:
+def compute_all_indicators(df: pd.DataFrame) -> dict[str, float | bool | str | None]:
     """
     Compute the full set of technical indicators for a ticker.
 
@@ -289,10 +398,15 @@ def compute_all_indicators(df: pd.DataFrame) -> dict:
     Returns
     -------
     Dict containing all scalar indicator values needed by the screener
-    and signal modules.
+    and signal modules.  Returns an empty dict when there is insufficient
+    data (fewer than 200 bars — required for SMA-200).
     """
-    if df.empty or len(df) < 30:
-        logger.warning("Insufficient data for indicator calculation (%d rows)", len(df))
+    if df.empty or len(df) < 200:
+        logger.warning(
+            "Insufficient data for full indicator calculation (%d rows). "
+            "Need at least 200 bars for SMA-200. Returning empty dict.",
+            len(df),
+        )
         return {}
 
     cfg = TECHNICAL_SETTINGS
@@ -313,6 +427,11 @@ def compute_all_indicators(df: pd.DataFrame) -> dict:
     # --- RSI ---
     rsi_series = calculate_rsi(close, cfg["rsi_period"])
     rsi = float(rsi_series.iloc[-1]) if not np.isnan(rsi_series.iloc[-1]) else None
+
+    # --- Stochastic RSI ---
+    stoch = calculate_stoch_rsi(close)
+    stoch_k = float(stoch["stoch_k"].iloc[-1]) if not np.isnan(stoch["stoch_k"].iloc[-1]) else None
+    stoch_d = float(stoch["stoch_d"].iloc[-1]) if not np.isnan(stoch["stoch_d"].iloc[-1]) else None
 
     # --- MACD ---
     macd_dict = calculate_macd(close, cfg["macd_fast"], cfg["macd_slow"], cfg["macd_signal"])
@@ -335,6 +454,10 @@ def compute_all_indicators(df: pd.DataFrame) -> dict:
     # --- Volume ---
     vol_ratio = volume_ratio(volume, cfg["volume_avg_period"])
 
+    # --- OBV ---
+    obv_series = calculate_obv(close, volume)
+    obv = float(obv_series.iloc[-1]) if not np.isnan(obv_series.iloc[-1]) else None
+
     # --- Support & Resistance ---
     sr = calculate_support_resistance(df)
 
@@ -348,6 +471,10 @@ def compute_all_indicators(df: pd.DataFrame) -> dict:
         "rsi": rsi,
         "rsi_overbought": rsi is not None and rsi > cfg["rsi_overbought"],
         "rsi_oversold": rsi is not None and rsi < cfg["rsi_oversold"],
+        "stoch_rsi_k": stoch_k,
+        "stoch_rsi_d": stoch_d,
+        "stoch_rsi_overbought": stoch_k is not None and stoch_k > 80,
+        "stoch_rsi_oversold": stoch_k is not None and stoch_k < 20,
         "macd": macd_val,
         "macd_signal": macd_signal_val,
         "macd_histogram": macd_hist_val,
@@ -358,7 +485,70 @@ def compute_all_indicators(df: pd.DataFrame) -> dict:
         "bb_squeeze": bb_squeeze,
         "atr": atr,
         "volume_ratio": vol_ratio,
+        "obv": obv,
         "support": sr.get("support"),
         "resistance": sr.get("resistance"),
         "trend": trend,
+    }
+
+
+def compute_multi_timeframe_signal(
+    ticker: str,
+    periods: list[str] | None = None,
+) -> dict:
+    """
+    Fetch and analyse a ticker on multiple timeframes and return a confluence score.
+
+    Parameters
+    ----------
+    ticker:
+        Equity symbol.
+    periods:
+        yfinance period strings to analyse (default ["1y", "2y"]).
+        Note: yfinance "interval" is daily; multi-period gives more history.
+
+    Returns
+    -------
+    Dict with keys: daily_trend, weekly_trend, confluence (STRONG/MODERATE/WEAK),
+    and confluence_score (0–100).
+    """
+    if periods is None:
+        periods = ["1y", "2y"]
+
+    from src.data.market_data import fetch_ohlcv
+
+    results: dict[str, str] = {}
+    for period in periods:
+        df = fetch_ohlcv(ticker, period=period)
+        if df.empty or len(df) < 200:
+            results[period] = "NEUTRAL"
+            continue
+        indicators = compute_all_indicators(df)
+        results[period] = indicators.get("trend", "NEUTRAL")
+
+    trends = list(results.values())
+    bullish_count = trends.count("BULLISH")
+    bearish_count = trends.count("BEARISH")
+    total = len(trends)
+
+    if bullish_count == total:
+        confluence = "STRONG BULLISH"
+        score = 85.0
+    elif bullish_count > total / 2:
+        confluence = "MODERATE BULLISH"
+        score = 65.0
+    elif bearish_count == total:
+        confluence = "STRONG BEARISH"
+        score = 15.0
+    elif bearish_count > total / 2:
+        confluence = "MODERATE BEARISH"
+        score = 35.0
+    else:
+        confluence = "NEUTRAL"
+        score = 50.0
+
+    return {
+        **{f"trend_{p}": v for p, v in results.items()},
+        "confluence": confluence,
+        "confluence_score": score,
     }

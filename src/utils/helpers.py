@@ -28,13 +28,46 @@ def setup_logging(level: int = logging.INFO, log_file: Optional[str] = None) -> 
         Logging level (default INFO).
     log_file:
         Optional path to a log file.  Console handler is always added.
+
+    Notes
+    -----
+    Set the ``LOG_FORMAT=json`` environment variable to emit JSON-structured
+    log records (requires ``python-json-logger``).
     """
-    fmt = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
-    datefmt = "%Y-%m-%d %H:%M:%S"
-    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
-    if log_file:
-        handlers.append(logging.FileHandler(log_file))
-    logging.basicConfig(level=level, format=fmt, datefmt=datefmt, handlers=handlers, force=True)
+    import os
+
+    log_format_env = os.getenv("LOG_FORMAT", "").lower()
+    handlers: list[logging.Handler] = []
+
+    if log_format_env == "json":
+        try:
+            from pythonjsonlogger import jsonlogger  # type: ignore[import]
+            formatter = jsonlogger.JsonFormatter(
+                fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
+                datefmt="%Y-%m-%dT%H:%M:%S",
+            )
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(formatter)
+            handlers.append(console_handler)
+            if log_file:
+                file_handler = logging.FileHandler(log_file)
+                file_handler.setFormatter(formatter)
+                handlers.append(file_handler)
+        except ImportError:
+            log_format_env = ""  # fall through to plain text
+
+    if log_format_env != "json":
+        fmt = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+        datefmt = "%Y-%m-%d %H:%M:%S"
+        plain_handler = logging.StreamHandler(sys.stdout)
+        plain_handler.setFormatter(logging.Formatter(fmt=fmt, datefmt=datefmt))
+        handlers.append(plain_handler)
+        if log_file:
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setFormatter(logging.Formatter(fmt=fmt, datefmt=datefmt))
+            handlers.append(file_handler)
+
+    logging.basicConfig(level=level, handlers=handlers, force=True)
 
 
 # ---------------------------------------------------------------------------

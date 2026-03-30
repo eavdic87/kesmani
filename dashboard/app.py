@@ -29,7 +29,7 @@ st.set_page_config(
     page_title="KešMani | Trading Intelligence",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 
 # ---------------------------------------------------------------------------
@@ -40,6 +40,8 @@ if "dark_mode" not in st.session_state:
 if "account_size" not in st.session_state:
     from config.settings import ACCOUNT_SIZE
     st.session_state["account_size"] = ACCOUNT_SIZE
+if "colorblind_mode" not in st.session_state:
+    st.session_state["colorblind_mode"] = False
 
 # Apply active theme CSS
 apply_theme()
@@ -59,6 +61,17 @@ with st.sidebar:
     dark = st.toggle("🌙 Dark Mode", value=st.session_state["dark_mode"], key="_dm_toggle")
     if dark != st.session_state["dark_mode"]:
         st.session_state["dark_mode"] = dark
+        st.rerun()
+
+    # Color-blind mode
+    cb_mode = st.toggle(
+        "👁️ Color-blind Mode",
+        value=st.session_state.get("colorblind_mode", False),
+        key="_cb_toggle",
+        help="Switches signal colors to blue/orange (deuteranopia-friendly)",
+    )
+    if cb_mode != st.session_state.get("colorblind_mode", False):
+        st.session_state["colorblind_mode"] = cb_mode
         st.rerun()
 
     st.markdown("---")
@@ -199,3 +212,32 @@ st.markdown(
     > Always do your own research before entering any trade.
     """
 )
+
+# ---------------------------------------------------------------------------
+# Data freshness footer
+# ---------------------------------------------------------------------------
+from config.settings import CACHE_DIR
+import time as _t
+
+def _get_cache_freshness() -> str:
+    """Return a string describing how fresh the cached data is."""
+    try:
+        cache_files = list(CACHE_DIR.glob("*.parquet"))
+        if not cache_files:
+            return "No cached data"
+        latest_mtime = max(f.stat().st_mtime for f in cache_files)
+        dt = datetime.fromtimestamp(latest_mtime)
+        age_minutes = (_t.time() - latest_mtime) / 60
+        if age_minutes < 1:
+            age_str = "just now"
+        elif age_minutes < 60:
+            age_str = f"{int(age_minutes)}m ago"
+        else:
+            age_str = f"{int(age_minutes/60)}h ago"
+        return f"{dt.strftime('%H:%M:%S')} ({age_str})"
+    except Exception:
+        return "Unknown"
+
+st.markdown("---")
+freshness = _get_cache_freshness()
+st.caption(f"🕐 Data as of: **{freshness}** &nbsp;|&nbsp; ⚠️ For informational purposes only. Not financial advice.")
