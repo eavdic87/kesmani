@@ -284,13 +284,19 @@ def calculate_risk_of_ruin(
     if avg_loss_pct <= 0:
         return 0.0
 
+    # Clamp risk_per_trade_pct to avoid extreme exponentiation (e.g. 1/0.0001 = 10000)
+    risk_per_trade_pct = max(risk_per_trade_pct, 0.001)
+
     edge = win_rate * avg_win_pct - (1 - win_rate) * avg_loss_pct
     if edge >= 0:
         # Positive expectancy — use the standard formula
         ratio = (1 - edge) / (1 + edge)
         if ratio <= 0:
             return 0.0
-        ror = ratio ** (1.0 / risk_per_trade_pct)
+        try:
+            ror = ratio ** (1.0 / risk_per_trade_pct)
+        except (OverflowError, ZeroDivisionError):
+            return 0.0
         return round(min(1.0, max(0.0, ror)), 6)
     else:
         # Negative expectancy — ruin is certain given enough trades

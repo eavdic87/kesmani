@@ -262,6 +262,14 @@ if sector_rotation:
     import plotly.express as px
     from dashboard.components.charts import get_chart_layout
 
+    # Color scale: respects color-blind mode
+    _is_cb = st.session_state.get("colorblind_mode", False)
+    if _is_cb:
+        # Blue (low) → orange (high) — deuteranopia-safe
+        _color_scale = [[0, "#C04000"], [0.5, "#F59E0B"], [1.0, "#0075DC"]]
+    else:
+        _color_scale = [[0, "#EF4444"], [0.5, "#F59E0B"], [1.0, "#10B981"]]
+
     treemap_data = {
         "sector": [sr["sector"] for sr in sector_rotation],
         "avg_score": [sr["avg_score"] for sr in sector_rotation],
@@ -281,7 +289,7 @@ if sector_rotation:
         path=["sector"],
         values="ticker_count",
         color="avg_score",
-        color_continuous_scale=[[0, "#EF4444"], [0.5, "#F59E0B"], [1.0, "#10B981"]],
+        color_continuous_scale=_color_scale,
         color_continuous_midpoint=50,
         custom_data=["avg_score", "strong_buys", "buys", "best_ticker"],
         title="",

@@ -222,7 +222,9 @@ def calculate_support_resistance(df: pd.DataFrame, window: int = 20) -> dict[str
     low = df["Low"]
     current_price = float(close.iloc[-1])
 
-    # Vectorized pivot detection using rolling windows
+    # Vectorized pivot detection using centered rolling windows (replaces O(n²) loop).
+    # window*2+1 looks at `window` bars before and after each bar (center=True),
+    # so a pivot high is a bar whose High equals the rolling max of its neighborhood.
     rolling_high_max = high.rolling(window=window * 2 + 1, center=True, min_periods=window).max()
     rolling_low_min = low.rolling(window=window * 2 + 1, center=True, min_periods=window).min()
 

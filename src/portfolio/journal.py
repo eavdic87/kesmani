@@ -100,7 +100,11 @@ def add_journal_entry(
     The newly created journal entry dict.
     """
     if setup_type not in VALID_SETUP_TYPES:
-        logger.warning("Unknown setup_type '%s'. Using 'swing'.", setup_type)
+        logger.warning(
+            "Invalid setup_type '%s' — must be one of %s. Defaulting to 'swing'.",
+            setup_type,
+            sorted(VALID_SETUP_TYPES),
+        )
         setup_type = "swing"
 
     entry: dict = {

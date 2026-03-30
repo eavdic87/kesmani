@@ -63,7 +63,13 @@ def _init_db(conn: sqlite3.Connection) -> None:
 
 @contextmanager
 def _db():
-    """Context manager that yields an open, initialised SQLite connection."""
+    """
+    Context manager that yields an open, initialised SQLite connection.
+
+    A new connection is created on every call so there is no shared
+    connection state between threads — ``check_same_thread=False`` is
+    safe here because each call to ``_db()`` owns its own connection.
+    """
     DB_FILE.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_FILE), timeout=10, check_same_thread=False)
     conn.row_factory = sqlite3.Row
