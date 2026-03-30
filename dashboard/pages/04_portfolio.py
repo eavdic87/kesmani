@@ -2,7 +2,8 @@
 Page 4: Portfolio — KešMani Dashboard
 
 Position management, live P&L, risk heat gauge, position sizing calculator,
-and trade history.
+stop/target alert banners, trailing stop controls, sector exposure chart,
+risk-of-ruin calculator, and trade history.
 """
 
 import sys
@@ -19,15 +20,19 @@ from src.portfolio.tracker import (
     update_stop_loss,
     get_portfolio_summary,
 )
+from src.portfolio.alerts import get_all_alerts
+from src.portfolio.trailing_stop import update_trailing_stops
 from src.analysis.risk_manager import (
     calculate_position_size,
     calculate_portfolio_heat,
     would_exceed_heat_limit,
+    calculate_risk_of_ruin,
 )
 from src.utils.helpers import fmt_currency, fmt_pct
-from dashboard.components.charts import portfolio_pie
+from dashboard.components.charts import portfolio_pie, sector_bar_chart
 from dashboard.components.tables import positions_table, closed_trades_table
 from dashboard.components.metrics import heat_gauge
+from dashboard.components.cards import render_alert_badge
 from config.settings import ALL_TICKERS, PORTFOLIO_SETTINGS
 
 st.set_page_config(page_title="KešMani | Portfolio", page_icon="💼", layout="wide")
@@ -43,6 +48,35 @@ st.title("💼 Portfolio Tracker — KešMani")
 portfolio = get_portfolio_summary()
 positions = portfolio.get("positions", [])
 account_size = portfolio.get("net_worth", PORTFOLIO_SETTINGS["starting_capital"])
+
+# ---------------------------------------------------------------------------
+# Alert banners
+# ---------------------------------------------------------------------------
+alerts = get_all_alerts(positions)
+stop_alerts = alerts.get("stop", [])
+target_alerts = alerts.get("target", [])
+
+if stop_alerts:
+    stop_tickers = " ".join(render_alert_badge("STOP", a["ticker"]) for a in stop_alerts)
+    st.markdown(
+        f'<div style="background:#7F1D1D;border:1px solid #EF4444;border-radius:10px;'
+        f'padding:12px 16px;margin-bottom:12px;">'
+        f'<b style="color:#FCA5A5;">🚨 STOP LOSS ALERT</b>&nbsp;&nbsp;{stop_tickers}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+if target_alerts:
+    target_badges = " ".join(
+        render_alert_badge(a.get("alert_type", "TARGET_1"), a["ticker"]) for a in target_alerts
+    )
+    st.markdown(
+        f'<div style="background:#064E3B;border:1px solid #10B981;border-radius:10px;'
+        f'padding:12px 16px;margin-bottom:12px;">'
+        f'<b style="color:#6EE7B7;">🎯 TARGET HIT</b>&nbsp;&nbsp;{target_badges}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 # ---------------------------------------------------------------------------
 # Summary metrics
@@ -61,9 +95,9 @@ c5.metric("Realized P&L", fmt_currency(portfolio.get("total_realized_pnl")))
 st.divider()
 
 # ---------------------------------------------------------------------------
-# Portfolio allocation pie + heat gauge
+# Portfolio allocation pie + sector exposure + heat gauge
 # ---------------------------------------------------------------------------
-col_pie, col_heat = st.columns([2, 1])
+col_pie, col_sector, col_heat = st.columns([2, 2, 1])
 
 with col_pie:
     st.subheader("📊 Allocation")
@@ -71,6 +105,23 @@ with col_pie:
         st.plotly_chart(portfolio_pie(positions), use_container_width=True)
     else:
         st.info("No open positions to display.")
+
+with col_sector:
+    st.subheader("🏢 Sector Exposure")
+    if positions:
+        from config.settings import TICKER_SECTORS
+        total_val = sum(p.get("market_value", 0) for p in positions) or 1
+        sector_map: dict[str, float] = {}
+        for p in positions:
+            sector = TICKER_SECTORS.get(p["ticker"], "Other")
+            sector_map[sector] = sector_map.get(sector, 0) + p.get("market_value", 0)
+        sector_data = [
+            {"sector": s, "pct": round(v / total_val * 100, 1)}
+            for s, v in sorted(sector_map.items(), key=lambda x: -x[1])
+        ]
+        st.plotly_chart(sector_bar_chart(sector_data), use_container_width=True)
+    else:
+        st.info("No positions to show sector data.")
 
 with col_heat:
     st.subheader("🌡️ Risk Heat")
@@ -84,9 +135,46 @@ with col_heat:
     )
     heat_gauge(heat_data.get("total_heat_pct", 0), heat_data.get("max_heat_pct", 8))
 
-    # Per-position heat
     for ph in heat_data.get("position_heats", []):
         st.markdown(f"**{ph['ticker']}**: {ph['heat_pct']:.2f}% heat ({fmt_currency(ph['risk_dollars'])} at risk)")
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Trailing stop controls
+# ---------------------------------------------------------------------------
+if positions:
+    with st.expander("🎯 Trailing Stop Manager"):
+        ts_col1, ts_col2, ts_col3 = st.columns(3)
+        with ts_col1:
+            use_ts = st.toggle("Enable Trailing Stops", value=False)
+        with ts_col2:
+            ts_method = st.radio("Method", ["Percentage", "ATR-based"], horizontal=True)
+        with ts_col3:
+            if ts_method == "Percentage":
+                trail_pct = st.slider("Trail %", 2.0, 20.0, 8.0, 0.5) / 100
+                atr_mult = 2.0
+            else:
+                trail_pct = 0.08
+                atr_mult = st.slider("ATR Multiplier", 1.0, 4.0, 2.0, 0.1)
+
+        if use_ts and st.button("🔄 Update All Trailing Stops"):
+            updated = update_trailing_stops(
+                positions,
+                trail_pct=trail_pct,
+                use_atr=(ts_method == "ATR-based"),
+                atr_multiplier=atr_mult,
+            )
+            changes = 0
+            for orig, upd in zip(positions, updated):
+                if upd["stop_loss"] != orig["stop_loss"]:
+                    update_stop_loss(orig["id"], upd["stop_loss"])
+                    changes += 1
+            if changes:
+                st.success(f"Updated trailing stops on {changes} position(s).")
+                st.rerun()
+            else:
+                st.info("No stops needed updating.")
 
 st.divider()
 
@@ -134,7 +222,8 @@ with st.form("add_position_form"):
     with f_col1:
         f_ticker = st.selectbox("Ticker", ALL_TICKERS)
         f_entry = st.number_input("Entry Price ($)", min_value=0.01, step=0.01)
-        f_shares = st.number_input("Shares", min_value=1, step=1)
+        f_shares = st.number_input("Shares", min_value=0.001, step=0.001, format="%.3f")
+        f_fractional = st.checkbox("Fractional shares", value=False, help="Enable for brokers supporting fractional shares")
     with f_col2:
         f_stop = st.number_input("Stop Loss ($)", min_value=0.01, step=0.01)
         f_target1 = st.number_input("Target 1 ($)", min_value=0.01, step=0.01)
@@ -152,12 +241,14 @@ with st.form("add_position_form"):
             if exceeds:
                 st.warning("⚠️ This position would exceed your max portfolio heat limit. Consider reducing size.")
             add_position(
-                f_ticker, f_entry, int(f_shares), f_stop,
+                f_ticker, f_entry, f_shares, f_stop,
                 f_target1 if f_target1 > 0 else None,
                 f_target2 if f_target2 > 0 else None,
                 f_notes,
+                fractional=f_fractional,
             )
-            st.success(f"Added {int(f_shares)} shares of {f_ticker} @ {fmt_currency(f_entry)}")
+            shares_disp = f"{f_shares:.3f}" if f_fractional else f"{int(f_shares)}"
+            st.success(f"Added {shares_disp} shares of {f_ticker} @ {fmt_currency(f_entry)}")
             st.rerun()
         else:
             st.error("Invalid inputs: entry price must be greater than stop loss.")
@@ -188,6 +279,38 @@ with st.expander("Calculate position size"):
             s4.metric("Risk per Share", fmt_currency(sizing["risk_per_share"]))
         except ValueError as e:
             st.error(str(e))
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Risk-of-ruin calculator
+# ---------------------------------------------------------------------------
+st.subheader("☠️ Risk-of-Ruin Calculator")
+
+with st.expander("Sanity-check your system parameters"):
+    rr_col1, rr_col2 = st.columns(2)
+    with rr_col1:
+        rr_win_rate = st.slider("Win Rate (%)", 10, 90, 55, 1, key="rr_wr") / 100
+        rr_avg_win = st.slider("Avg Win (% of account)", 0.5, 10.0, 2.0, 0.1, key="rr_aw") / 100
+    with rr_col2:
+        rr_avg_loss = st.slider("Avg Loss (% of account)", 0.5, 10.0, 1.0, 0.1, key="rr_al") / 100
+        rr_risk_per_trade = st.slider("Risk per Trade (%)", 0.5, 5.0, 2.0, 0.1, key="rr_rpt") / 100
+
+    ror = calculate_risk_of_ruin(rr_win_rate, rr_avg_win, rr_avg_loss, rr_risk_per_trade)
+    ror_pct = ror * 100
+    expectancy = rr_win_rate * rr_avg_win - (1 - rr_win_rate) * rr_avg_loss
+
+    rr_r1, rr_r2, rr_r3 = st.columns(3)
+    rr_r1.metric("Risk of Ruin", f"{ror_pct:.2f}%", delta=None)
+    rr_r2.metric("Expectancy (per trade)", f"{expectancy*100:.3f}%")
+    rr_r3.metric("Profit Factor", f"{(rr_win_rate*rr_avg_win)/((1-rr_win_rate)*rr_avg_loss):.2f}x" if rr_avg_loss > 0 else "∞")
+
+    if ror_pct < 1:
+        st.success("✅ Risk of ruin is very low. Your system looks well-calibrated.")
+    elif ror_pct < 5:
+        st.warning("⚠️ Moderate risk of ruin. Consider tightening your risk parameters.")
+    else:
+        st.error("🚨 High risk of ruin! Reduce position size or improve win rate before trading live.")
 
 st.divider()
 

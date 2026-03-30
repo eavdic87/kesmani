@@ -238,3 +238,66 @@ def portfolio_statistics(closed_trades: list[dict]) -> dict:
         "profit_factor": round(profit_factor, 2),
         "estimated_sharpe": round(sharpe, 2),
     }
+
+
+# ---------------------------------------------------------------------------
+# Risk of Ruin
+# ---------------------------------------------------------------------------
+
+def calculate_risk_of_ruin(
+    win_rate: float,
+    avg_win_pct: float,
+    avg_loss_pct: float,
+    risk_per_trade_pct: float,
+    num_trades: int = 1000,
+) -> float:
+    """
+    Estimate the probability of ruin (account drawdown to zero or below).
+
+    Uses the standard closed-form approximation:
+        R = ((1 - edge) / (1 + edge)) ^ (1 / risk_per_trade)
+
+    where edge = win_rate * avg_win_pct - (1 - win_rate) * avg_loss_pct.
+
+    Parameters
+    ----------
+    win_rate:
+        Fraction of winning trades (e.g. 0.55 for 55 %).
+    avg_win_pct:
+        Average win size as a fraction of risk (e.g. 0.02 for 2 %).
+    avg_loss_pct:
+        Average loss size as a fraction of risk (e.g. 0.01 for 1 %).
+    risk_per_trade_pct:
+        Fraction of account risked per trade (e.g. 0.02 for 2 %).
+    num_trades:
+        Not used in the closed-form formula but kept for API clarity.
+
+    Returns
+    -------
+    Probability of ruin as a fraction in [0, 1].
+    A value close to 0 is ideal; above 0.10 is dangerous.
+    """
+    if win_rate <= 0 or win_rate >= 1:
+        return 1.0 if win_rate <= 0 else 0.0
+    if risk_per_trade_pct <= 0:
+        return 0.0
+    if avg_loss_pct <= 0:
+        return 0.0
+
+    # Clamp risk_per_trade_pct to avoid extreme exponentiation (e.g. 1/0.0001 = 10000)
+    risk_per_trade_pct = max(risk_per_trade_pct, 0.001)
+
+    edge = win_rate * avg_win_pct - (1 - win_rate) * avg_loss_pct
+    if edge >= 0:
+        # Positive expectancy — use the standard formula
+        ratio = (1 - edge) / (1 + edge)
+        if ratio <= 0:
+            return 0.0
+        try:
+            ror = ratio ** (1.0 / risk_per_trade_pct)
+        except (OverflowError, ZeroDivisionError):
+            return 0.0
+        return round(min(1.0, max(0.0, ror)), 6)
+    else:
+        # Negative expectancy — ruin is certain given enough trades
+        return 1.0

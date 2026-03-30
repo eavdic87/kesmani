@@ -73,7 +73,13 @@ with st.sidebar:
         ["Composite Score", "RSI", "Volume Ratio", "Price", "Day Change %"],
     )
 
-    scan_btn = st.button("🔎 Scan Full Market", type="primary", use_container_width=True)
+    scan_btn = st.button(
+        "🔎 Scan Full Market",
+        type="primary",
+        use_container_width=True,
+        help="Scans 200+ tickers across all sectors. May take 30–60 seconds. "
+             "Narrow to specific sectors above to speed up the scan.",
+    )
 
 # ---------------------------------------------------------------------------
 # Title
@@ -108,35 +114,35 @@ if scan_btn or "scanner_results" not in st.session_state:
     else:
         tickers = FULL_UNIVERSE
 
-    # Progress bar — scan sector by sector
-    progress_bar = st.progress(0, text="Initializing scan…")
-    status_text = st.empty()
-
     sectors_to_scan = selected_sectors if selected_sectors else list(SCAN_UNIVERSE.keys())
     all_results: list[dict] = []
     seen_tickers: set[str] = set()
 
-    for i, cat in enumerate(sectors_to_scan):
-        status_text.markdown(f"**Scanning sector:** `{cat}` ({i + 1}/{len(sectors_to_scan)})")
-        progress_bar.progress((i + 1) / len(sectors_to_scan), text=f"Scanning {cat}…")
-        cat_tickers = [t for t in SCAN_UNIVERSE.get(cat, []) if t not in seen_tickers]
-        if not cat_tickers:
-            continue
-        try:
-            chunk = scan_market(
-                tickers=cat_tickers,
-                account_size=account_size,
-                min_score=0.0,
-            )
-            for r in chunk:
-                if r["ticker"] not in seen_tickers:
-                    seen_tickers.add(r["ticker"])
-                    all_results.append(r)
-        except Exception as exc:
-            status_text.warning(f"Scan failed for {cat}: {exc}")
+    with st.status("🔎 Scanning market…", expanded=True) as scan_status:
+        st.write("📡 Fetching market data in parallel…")
+        progress_bar = st.progress(0, text="Initializing…")
 
-    progress_bar.empty()
-    status_text.empty()
+        for i, cat in enumerate(sectors_to_scan):
+            st.write(f"📊 Analyzing sector: **{cat}** ({i + 1}/{len(sectors_to_scan)})")
+            progress_bar.progress((i + 1) / len(sectors_to_scan), text=f"Scanning {cat}…")
+            cat_tickers = [t for t in SCAN_UNIVERSE.get(cat, []) if t not in seen_tickers]
+            if not cat_tickers:
+                continue
+            try:
+                chunk = scan_market(
+                    tickers=cat_tickers,
+                    account_size=account_size,
+                    min_score=0.0,
+                )
+                for r in chunk:
+                    if r["ticker"] not in seen_tickers:
+                        seen_tickers.add(r["ticker"])
+                        all_results.append(r)
+            except Exception as exc:
+                st.warning(f"Scan failed for {cat}: {exc}")
+
+        st.write(f"✅ Scan complete — {len(all_results)} tickers analyzed.")
+        scan_status.update(label="✅ Scan complete!", state="complete", expanded=False)
 
     st.session_state["scanner_results"] = all_results
     st.session_state["scanner_account_size_used"] = account_size
@@ -249,33 +255,65 @@ if top5:
     st.markdown("")
 
 # ---------------------------------------------------------------------------
-# Sector Rotation Heatmap
+# Sector Rotation Heatmap — Plotly Treemap
 # ---------------------------------------------------------------------------
 if sector_rotation:
     st.subheader("🌡️ Sector Rotation Heatmap")
-    max_score = max(s["avg_score"] for s in sector_rotation) or 1
-    min_score_r = min(s["avg_score"] for s in sector_rotation)
-    score_range = max_score - min_score_r or 1
+    import plotly.express as px
+    from dashboard.components.charts import get_chart_layout
 
-    heat_cols = st.columns(min(len(sector_rotation), 6))
-    for i, sr in enumerate(sector_rotation):
-        col = heat_cols[i % len(heat_cols)]
-        norm = (sr["avg_score"] - min_score_r) / score_range
-        # Green (good) → Red (bad)
-        r = int(204 * (1 - norm))
-        g = int(204 * norm)
-        bg = f"rgb({r},{g},40)"
-        col.markdown(
-            f"""
-            <div style="background:{bg};border-radius:8px;padding:8px;
-                        text-align:center;margin:2px;">
-              <div style="font-weight:bold;font-size:0.8em;">{sr['sector']}</div>
-              <div style="font-size:1.1em;font-weight:bold;">{sr['avg_score']:.0f}</div>
-              <div style="font-size:0.7em;">🚀{sr['strong_buys']} ✅{sr['buys']}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    # Color scale: respects color-blind mode
+    _is_cb = st.session_state.get("colorblind_mode", False)
+    if _is_cb:
+        # Blue (low) → orange (high) — deuteranopia-safe
+        _color_scale = [[0, "#C04000"], [0.5, "#F59E0B"], [1.0, "#0075DC"]]
+    else:
+        _color_scale = [[0, "#EF4444"], [0.5, "#F59E0B"], [1.0, "#10B981"]]
+
+    treemap_data = {
+        "sector": [sr["sector"] for sr in sector_rotation],
+        "avg_score": [sr["avg_score"] for sr in sector_rotation],
+        "ticker_count": [sr["ticker_count"] for sr in sector_rotation],
+        "strong_buys": [sr["strong_buys"] for sr in sector_rotation],
+        "buys": [sr["buys"] for sr in sector_rotation],
+        "best_ticker": [sr["best_ticker"] for sr in sector_rotation],
+        "label": [
+            f"{sr['sector']}<br>Score: {sr['avg_score']:.0f}<br>"
+            f"🚀{sr['strong_buys']} ✅{sr['buys']}"
+            for sr in sector_rotation
+        ],
+    }
+
+    tree_fig = px.treemap(
+        treemap_data,
+        path=["sector"],
+        values="ticker_count",
+        color="avg_score",
+        color_continuous_scale=_color_scale,
+        color_continuous_midpoint=50,
+        custom_data=["avg_score", "strong_buys", "buys", "best_ticker"],
+        title="",
+    )
+    tree_fig.update_traces(
+        hovertemplate=(
+            "<b>%{label}</b><br>"
+            "Avg Score: %{customdata[0]:.1f}<br>"
+            "Strong Buys: %{customdata[1]}<br>"
+            "Buys: %{customdata[2]}<br>"
+            "Best: %{customdata[3]}"
+            "<extra></extra>"
+        ),
+        texttemplate="%{label}<br>%{value} tickers",
+    )
+    layout = get_chart_layout()
+    tree_fig.update_layout(
+        height=400,
+        paper_bgcolor=layout["paper_bgcolor"],
+        font_color=layout["font"]["color"],
+        margin=dict(l=10, r=10, t=10, b=10),
+        coloraxis_showscale=True,
+    )
+    st.plotly_chart(tree_fig, use_container_width=True)
     st.markdown("")
 
 st.divider()

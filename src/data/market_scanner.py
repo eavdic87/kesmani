@@ -13,7 +13,8 @@ Key public functions:
 """
 
 import logging
-from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Callable, Optional
 
 from config.settings import (
     FULL_UNIVERSE,
@@ -64,6 +65,8 @@ def scan_market(
     min_price: float | None = None,
     max_price: float | None = None,
     quick: bool = False,
+    max_workers: int = 10,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[dict]:
     """
     Scan tickers and return signal dicts ranked by composite score.
@@ -87,6 +90,11 @@ def scan_market(
     quick:
         When True, skip tickers that already have a fresh cache entry
         (speeds up repeated intraday runs).
+    max_workers:
+        Number of parallel threads used for data fetching (default 10).
+    progress_callback:
+        Optional ``Callable[[completed, total], None]`` invoked after each
+        ticker completes.  Use this to update a Streamlit progress bar.
 
     Returns
     -------
@@ -113,6 +121,29 @@ def scan_market(
         universe = [t for t in universe if _is_fresh(t)] or universe
 
     logger.info("Scanning %d tickers…", len(universe))
+
+    # Parallel data prefetch so screener hits cache
+    total = len(universe)
+    completed = 0
+
+    def _prefetch(ticker: str) -> str:
+        fetch_ohlcv(ticker)
+        return ticker
+
+    if progress_callback is not None:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_prefetch, t): t for t in universe}
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as exc:
+                    logger.debug("Prefetch error: %s", exc)
+                completed += 1
+                progress_callback(completed, total)
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            list(executor.map(_prefetch, universe))
+
     screener_results = run_screener(universe)
     signals = generate_all_signals(screener_results, account_size)
 

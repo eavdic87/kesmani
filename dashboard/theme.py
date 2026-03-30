@@ -39,13 +39,22 @@ DARK = {
     "card_shadow": "0 1px 3px rgba(0,0,0,0.40), 0 1px 2px rgba(0,0,0,0.30)",
 }
 
-# Signal color mapping
+# Signal color mapping — standard palette
 _SIGNAL_COLORS = {
     "STRONG BUY": {"light": "#10B981", "dark": "#10B981"},
     "BUY": {"light": "#34D399", "dark": "#34D399"},
     "HOLD": {"light": "#6B7280", "dark": "#9CA3AF"},
     "SELL": {"light": "#EF4444", "dark": "#EF4444"},
     "AVOID": {"light": "#B91C1C", "dark": "#DC2626"},
+}
+
+# Color-blind friendly palette (blue/orange — deuteranopia-safe)
+_CB_SIGNAL_COLORS = {
+    "STRONG BUY": {"light": "#0075DC", "dark": "#3B9EF5"},
+    "BUY": {"light": "#4DA6FF", "dark": "#74BAFF"},
+    "HOLD": {"light": "#6B7280", "dark": "#9CA3AF"},
+    "SELL": {"light": "#FF6F20", "dark": "#FF8C47"},
+    "AVOID": {"light": "#C04000", "dark": "#E05010"},
 }
 
 # Confidence tier colors
@@ -82,6 +91,18 @@ def apply_theme() -> None:
     }}
     [data-testid="stSidebar"] * {{
         color: {t["text_primary"]} !important;
+    }}
+
+    /* ── Mobile responsive sidebar ── */
+    @media (max-width: 768px) {{
+        [data-testid="stSidebar"] {{
+            width: 100% !important;
+        }}
+        [data-testid="stSidebar"] .stSelectbox,
+        [data-testid="stSidebar"] .stNumberInput,
+        [data-testid="stSidebar"] .stSlider {{
+            width: 100% !important;
+        }}
     }}
 
     /* ── Cards ── */
@@ -213,8 +234,10 @@ def signal_color(signal: str, mode: str = "bg") -> str:
         "bg" → background hex, "text" → text hex.
     """
     is_dark = st.session_state.get("dark_mode", False)
+    is_cb = st.session_state.get("colorblind_mode", False)
     key = "dark" if is_dark else "light"
-    colors = _SIGNAL_COLORS.get(signal.upper(), {"light": "#6B7280", "dark": "#9CA3AF"})
+    palette = _CB_SIGNAL_COLORS if is_cb else _SIGNAL_COLORS
+    colors = palette.get(signal.upper(), {"light": "#6B7280", "dark": "#9CA3AF"})
     return colors[key]
 
 

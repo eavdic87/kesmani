@@ -1,15 +1,18 @@
 """
 Portfolio tracker for KešMani.
 
-Persists open positions to data/portfolio.json and provides
-CRUD operations plus live P&L calculations.
+Persists open positions to a SQLite database (data/portfolio.db) for atomic,
+crash-safe transactions.  Falls back to the legacy JSON file if the database
+cannot be opened.  Public API is identical to the original JSON-backed version
+so no page code changes are required.
 
 Position schema:
   {
     "ticker": "NVDA",
     "entry_date": "2026-03-01",
     "entry_price": 142.50,
-    "shares": 3,
+    "shares": 3.0,          # float — supports fractional shares
+    "fractional": False,    # True when broker allows fractional shares
     "stop_loss": 138.00,
     "target_1": 155.00,
     "target_2": 163.00,
@@ -19,6 +22,8 @@ Position schema:
 
 import json
 import logging
+import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -29,6 +34,50 @@ from src.data.market_data import get_current_price
 logger = logging.getLogger(__name__)
 
 PORTFOLIO_FILE = DATA_DIR / "portfolio.json"
+DB_FILE = DATA_DIR / "portfolio.db"
+
+# ---------------------------------------------------------------------------
+# SQLite helpers
+# ---------------------------------------------------------------------------
+
+def _init_db(conn: sqlite3.Connection) -> None:
+    """Create tables if they do not already exist."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS metadata (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS positions (
+            id            TEXT PRIMARY KEY,
+            data          TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS closed_trades (
+            id            TEXT PRIMARY KEY,
+            data          TEXT NOT NULL
+        );
+        """
+    )
+    conn.commit()
+
+
+@contextmanager
+def _db():
+    """
+    Context manager that yields an open, initialised SQLite connection.
+
+    A new connection is created on every call so there is no shared
+    connection state between threads — ``check_same_thread=False`` is
+    safe here because each call to ``_db()`` owns its own connection.
+    """
+    DB_FILE.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(DB_FILE), timeout=10, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    try:
+        _init_db(conn)
+        yield conn
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -36,19 +85,87 @@ PORTFOLIO_FILE = DATA_DIR / "portfolio.json"
 # ---------------------------------------------------------------------------
 
 def _load_portfolio() -> dict:
-    """Load the portfolio JSON file, returning a default skeleton if missing."""
+    """Load the portfolio from SQLite, returning a default skeleton if missing."""
+    try:
+        with _db() as conn:
+            # Metadata
+            rows = conn.execute("SELECT key, value FROM metadata").fetchall()
+            meta = {r["key"]: r["value"] for r in rows}
+            starting_capital = float(meta.get("starting_capital", PORTFOLIO_SETTINGS["starting_capital"]))
+            cash = float(meta.get("cash", starting_capital))
+            last_updated = meta.get("last_updated", datetime.now().isoformat())
+
+            # Positions
+            pos_rows = conn.execute("SELECT data FROM positions").fetchall()
+            positions = [json.loads(r["data"]) for r in pos_rows]
+
+            # Closed trades
+            ct_rows = conn.execute("SELECT data FROM closed_trades ORDER BY rowid").fetchall()
+            closed_trades = [json.loads(r["data"]) for r in ct_rows]
+
+            return {
+                "starting_capital": starting_capital,
+                "cash": cash,
+                "positions": positions,
+                "closed_trades": closed_trades,
+                "last_updated": last_updated,
+            }
+    except Exception as exc:
+        logger.error("SQLite load failed (%s), falling back to JSON", exc)
+        return _load_portfolio_json()
+
+
+def _save_portfolio(data: dict) -> None:
+    """Persist the portfolio dict atomically to SQLite."""
+    try:
+        with _db() as conn:
+            with conn:  # atomic transaction
+                conn.execute(
+                    "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+                    ("starting_capital", str(data.get("starting_capital", PORTFOLIO_SETTINGS["starting_capital"]))),
+                )
+                conn.execute(
+                    "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+                    ("cash", str(data.get("cash", 0.0))),
+                )
+                conn.execute(
+                    "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+                    ("last_updated", data.get("last_updated", datetime.now().isoformat())),
+                )
+                # Replace all positions
+                conn.execute("DELETE FROM positions")
+                for pos in data.get("positions", []):
+                    conn.execute(
+                        "INSERT INTO positions (id, data) VALUES (?, ?)",
+                        (pos["id"], json.dumps(pos, default=str)),
+                    )
+                # Upsert closed trades (append-only, never delete)
+                for ct in data.get("closed_trades", []):
+                    conn.execute(
+                        "INSERT OR IGNORE INTO closed_trades (id, data) VALUES (?, ?)",
+                        (ct["id"], json.dumps(ct, default=str)),
+                    )
+    except Exception as exc:
+        logger.error("SQLite save failed (%s), falling back to JSON", exc)
+        _save_portfolio_json(data)
+
+
+# ---------------------------------------------------------------------------
+# JSON fallback helpers (legacy)
+# ---------------------------------------------------------------------------
+
+def _load_portfolio_json() -> dict:
     if not PORTFOLIO_FILE.exists():
         return _default_portfolio()
     try:
         with open(PORTFOLIO_FILE, "r") as f:
             return json.load(f)
     except Exception as exc:
-        logger.error("Failed to load portfolio file: %s", exc)
+        logger.error("Failed to load portfolio JSON: %s", exc)
         return _default_portfolio()
 
 
-def _save_portfolio(data: dict) -> None:
-    """Persist the portfolio dict to disk."""
+def _save_portfolio_json(data: dict) -> None:
     PORTFOLIO_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(PORTFOLIO_FILE, "w") as f:
         json.dump(data, f, indent=2, default=str)
@@ -72,11 +189,12 @@ def _default_portfolio() -> dict:
 def add_position(
     ticker: str,
     entry_price: float,
-    shares: int,
+    shares: int | float,
     stop_loss: float,
     target_1: Optional[float] = None,
     target_2: Optional[float] = None,
     notes: str = "",
+    fractional: bool = False,
 ) -> dict:
     """
     Add a new open position to the portfolio.
@@ -88,27 +206,32 @@ def add_position(
     entry_price:
         Price at which shares were purchased.
     shares:
-        Number of shares.
+        Number of shares (int for whole shares, float when fractional=True).
     stop_loss:
         Stop-loss price.
     target_1, target_2:
         Price targets (optional).
     notes:
         Free-text notes.
+    fractional:
+        Set True for brokers that support fractional shares (e.g. Robinhood,
+        Schwab).  When True, ``shares`` is stored as a float.
 
     Returns
     -------
     The newly created position dict.
     """
     portfolio = _load_portfolio()
-    cost_basis = entry_price * shares
+    shares_value: float = float(shares) if fractional else float(int(shares))
+    cost_basis = entry_price * shares_value
 
     position: dict = {
         "id": _generate_id(),
         "ticker": ticker.upper(),
         "entry_date": datetime.now().strftime("%Y-%m-%d"),
         "entry_price": round(entry_price, 2),
-        "shares": shares,
+        "shares": shares_value,
+        "fractional": fractional,
         "cost_basis": round(cost_basis, 2),
         "stop_loss": round(stop_loss, 2),
         "target_1": round(target_1, 2) if target_1 else None,
@@ -120,7 +243,7 @@ def add_position(
     portfolio["cash"] = round(portfolio.get("cash", 0.0) - cost_basis, 2)
     portfolio["last_updated"] = datetime.now().isoformat()
     _save_portfolio(portfolio)
-    logger.info("Added position: %s x%d @ $%.2f", ticker, shares, entry_price)
+    logger.info("Added position: %s x%.4f @ $%.2f", ticker, shares_value, entry_price)
     return position
 
 

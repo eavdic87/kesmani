@@ -21,6 +21,10 @@ from src.analysis.technical import (
     calculate_macd,
     calculate_bollinger_bands,
     calculate_atr,
+    calculate_stoch_rsi,
+    calculate_obv,
+    calculate_relative_strength,
+    calculate_support_resistance,
     detect_macd_crossover,
     detect_bb_squeeze,
     volume_ratio,
@@ -301,6 +305,127 @@ class TestComputeAllIndicators:
         assert result == {}
 
     def test_insufficient_data_returns_empty(self):
-        df = make_ohlcv(10)
+        # Now requires >= 200 bars (for SMA-200)
+        df = make_ohlcv(150)
         result = compute_all_indicators(df)
+        assert result == {}
+
+    def test_exactly_200_bars_succeeds(self):
+        df = make_ohlcv(200)
+        result = compute_all_indicators(df)
+        assert "current_price" in result
+
+    def test_stoch_rsi_keys_present(self):
+        df = make_ohlcv(250)
+        result = compute_all_indicators(df)
+        assert "stoch_rsi_k" in result
+        assert "stoch_rsi_d" in result
+
+    def test_obv_key_present(self):
+        df = make_ohlcv(250)
+        result = compute_all_indicators(df)
+        assert "obv" in result
+
+
+# ---------------------------------------------------------------------------
+# Stochastic RSI tests
+# ---------------------------------------------------------------------------
+
+class TestStochasticRSI:
+    def test_returns_expected_keys(self):
+        df = make_ohlcv(100)
+        result = calculate_stoch_rsi(df["Close"])
+        assert "stoch_k" in result
+        assert "stoch_d" in result
+
+    def test_values_in_range(self):
+        df = make_ohlcv(100)
+        result = calculate_stoch_rsi(df["Close"])
+        k = result["stoch_k"].dropna()
+        d = result["stoch_d"].dropna()
+        assert (k >= 0).all() and (k <= 100).all()
+        assert (d >= 0).all() and (d <= 100).all()
+
+    def test_length_preserved(self):
+        df = make_ohlcv(100)
+        result = calculate_stoch_rsi(df["Close"])
+        assert len(result["stoch_k"]) == 100
+
+
+# ---------------------------------------------------------------------------
+# OBV tests
+# ---------------------------------------------------------------------------
+
+class TestOBV:
+    def test_increases_on_up_day(self):
+        # Simple 3-bar: price up, price up → OBV should grow
+        close = make_series([10.0, 11.0, 12.0])
+        volume = make_series([1000.0, 1000.0, 1000.0])
+        obv = calculate_obv(close, volume)
+        assert float(obv.iloc[-1]) > float(obv.iloc[0])
+
+    def test_decreases_on_down_day(self):
+        close = make_series([12.0, 11.0, 10.0])
+        volume = make_series([1000.0, 1000.0, 1000.0])
+        obv = calculate_obv(close, volume)
+        assert float(obv.iloc[-1]) < float(obv.iloc[0])
+
+    def test_length_preserved(self):
+        df = make_ohlcv(60)
+        obv = calculate_obv(df["Close"], df["Volume"])
+        assert len(obv) == 60
+
+
+# ---------------------------------------------------------------------------
+# Relative Strength tests
+# ---------------------------------------------------------------------------
+
+class TestRelativeStrength:
+    def test_outperforming_ticker_above_50(self):
+        # Ticker up 20% vs benchmark up 5% → RS > 50
+        np.random.seed(0)
+        n = 100
+        ticker_close = make_series([100.0 * (1.002 ** i) for i in range(n)])
+        bench_close = make_series([100.0 * (1.0005 ** i) for i in range(n)])
+        rs = calculate_relative_strength(ticker_close, bench_close, period=90)
+        assert rs > 50
+
+    def test_underperforming_ticker_below_50(self):
+        n = 100
+        ticker_close = make_series([100.0 * (0.999 ** i) for i in range(n)])
+        bench_close = make_series([100.0 * (1.001 ** i) for i in range(n)])
+        rs = calculate_relative_strength(ticker_close, bench_close, period=90)
+        assert rs < 50
+
+    def test_returns_50_for_short_series(self):
+        close = make_series([100.0] * 10)
+        bench = make_series([100.0] * 10)
+        rs = calculate_relative_strength(close, bench, period=90)
+        assert rs == 50.0
+
+
+# ---------------------------------------------------------------------------
+# Support & Resistance (vectorized) tests
+# ---------------------------------------------------------------------------
+
+class TestSupportResistanceVectorized:
+    def test_returns_expected_keys(self):
+        df = make_ohlcv(200)
+        result = calculate_support_resistance(df)
+        for key in ("current_price", "resistance", "support"):
+            assert key in result
+
+    def test_support_below_current_price(self):
+        df = make_ohlcv(200)
+        result = calculate_support_resistance(df)
+        assert result["support"] < result["current_price"]
+
+    def test_resistance_above_current_price(self):
+        df = make_ohlcv(200)
+        result = calculate_support_resistance(df)
+        assert result["resistance"] > result["current_price"]
+
+    def test_insufficient_data_returns_empty(self):
+        df = make_ohlcv(20)
+        result = calculate_support_resistance(df, window=20)
         assert result == {}
