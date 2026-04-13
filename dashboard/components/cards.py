@@ -102,3 +102,77 @@ def render_alert_badge(alert_type: str, ticker: str) -> str:
         f'background:{color};color:white;font-size:0.8rem;font-weight:700;'
         f'letter-spacing:0.05em;">{ticker}: {label}</span>'
     )
+
+
+def render_explainer_card(title: str, body: str) -> None:
+    """Render a soft blue/teal 'What does this mean?' information box."""
+    st.markdown(
+        f"""
+        <div class="km-explainer">
+            <strong>📖 {title}</strong>
+            <div style="margin-top:8px;">{body}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_step_card(steps: list[str], title: str = "How to do this") -> None:
+    """Render a numbered step-by-step guide card."""
+    steps_html = ""
+    for i, step in enumerate(steps, 1):
+        steps_html += (
+            f'<div class="km-step">'
+            f'<div class="km-step-number">{i}</div>'
+            f'<div class="km-step-body">{step}</div>'
+            f'</div>'
+        )
+    st.markdown(
+        f'<div style="margin-bottom:8px;"><strong>{title}</strong></div>{steps_html}',
+        unsafe_allow_html=True,
+    )
+
+
+def render_beginner_tip(tip: str) -> None:
+    """Render a soft yellow beginner tip box."""
+    st.markdown(
+        f'<div class="km-beginner-tip">💡 <strong>Beginner tip:</strong> {tip}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_hero_card(title: str, subtitle: str, color: str, emoji: str = "") -> None:
+    """Render the dominant hero card for the most important element on a page."""
+    st.markdown(
+        f"""
+        <div class="km-hero-card" style="border-color:{color};">
+            <div style="font-size:2.5rem;margin-bottom:8px;">{emoji}</div>
+            <div style="font-size:1.8rem;font-weight:800;color:{color};margin-bottom:6px;">{title}</div>
+            <div style="font-size:1rem;opacity:0.8;">{subtitle}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_action_needed_card(
+    ticker: str,
+    message: str,
+    action: str,
+    color: str = "#EF4444",
+) -> None:
+    """Render an urgent action-required card for portfolio alerts."""
+    bg = color + "15"
+    st.markdown(
+        f"""
+        <div class="km-action-card" style="background:{bg};border-color:{color};">
+            <div style="color:{color};font-size:1.1rem;font-weight:700;margin-bottom:4px;">
+                ⚠️ Action Needed: <strong>{ticker}</strong>
+            </div>
+            <div style="margin-bottom:6px;">{message}</div>
+            <div style="font-size:0.9rem;font-style:italic;color:{color};">{action}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+

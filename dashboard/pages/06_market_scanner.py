@@ -24,30 +24,32 @@ st.set_page_config(
     layout="wide",
 )
 
-from dashboard.theme import apply_theme
+from dashboard.theme import apply_theme, get_theme, jargon_tooltip
 apply_theme()
 
 # ---------------------------------------------------------------------------
 # Sidebar filters
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.subheader("🔎 Scanner Filters")
+    st.subheader("🔎 Search Filters")
+    st.caption("Use these filters to narrow down which stocks you want to see.")
 
     account_size = st.number_input(
-        "Account Size ($)",
+        "Your Account Size ($)",
         min_value=100.0,
         value=float(st.session_state.get("account_size", PORTFOLIO_SETTINGS["starting_capital"])),
         step=100.0,
         key="scanner_account_size",
+        help="Enter your account size so the system can calculate how many shares to recommend for each stock.",
     )
     st.session_state["account_size"] = account_size
 
     all_categories = sorted(SCAN_UNIVERSE.keys())
     selected_sectors = st.multiselect(
-        "Sector / Category",
+        "Industry / Sector",
         options=all_categories,
         default=[],
-        help="Leave empty to scan ALL sectors",
+        help="Leave blank to search everything, or pick specific industries you're interested in. Example: Technology, Healthcare.",
     )
 
     signal_opts = ["STRONG BUY", "BUY", "HOLD", "SELL", "AVOID"]
@@ -55,47 +57,83 @@ with st.sidebar:
         "Signal Filter",
         options=signal_opts,
         default=[],
-        help="Leave empty to show all signals",
+        help="STRONG BUY and BUY are the ones worth looking at if you want to buy something. Leave blank to show all.",
     )
 
-    min_score = st.slider("Minimum Composite Score", 0, 100, 0)
+    min_score = st.slider(
+        "Minimum Health Score",
+        0, 100, 0,
+        help="Score of 65+ is a good signal. 80+ is excellent. Think of it like a school grade — higher is better.",
+    )
 
     col_p1, col_p2 = st.columns(2)
-    min_price = col_p1.number_input("Min Price ($)", min_value=0.0, value=0.0, step=1.0)
-    max_price = col_p2.number_input("Max Price ($)", min_value=0.0, value=0.0, step=1.0,
-                                     help="0 = no limit")
+    min_price = col_p1.number_input(
+        "Min Price ($)",
+        min_value=0.0,
+        value=0.0,
+        step=1.0,
+        help="Filter out stocks cheaper than this price.",
+    )
+    max_price = col_p2.number_input(
+        "Max Price ($)",
+        min_value=0.0,
+        value=0.0,
+        step=1.0,
+        help="0 = no maximum. Set a price to filter out expensive stocks.",
+    )
 
-    afford_only = st.toggle("Only stocks I can afford", value=False,
-                             help="Hides stocks where 1 share > 5% of account")
+    afford_only = st.toggle(
+        "Only stocks I can afford",
+        value=False,
+        help="This hides very expensive stocks where even 1 share would cost more than 5% of your account. Useful for smaller accounts.",
+    )
 
     sort_by = st.selectbox(
-        "Sort By",
-        ["Composite Score", "RSI", "Volume Ratio", "Price", "Day Change %"],
+        "Sort Results By",
+        [
+            "Best Opportunity (Score)",
+            "Most Momentum (RSI)",
+            "Unusual Volume",
+            "Price (Low to High)",
+            "Best Day Today",
+        ],
+        help="Choose how to order the results. 'Best Opportunity' shows the highest-scored stocks first.",
     )
 
     scan_btn = st.button(
-        "🔎 Scan Full Market",
+        "🔍 Search the Market Now",
         type="primary",
         use_container_width=True,
-        help="Scans 200+ tickers across all sectors. May take 30–60 seconds. "
-             "Narrow to specific sectors above to speed up the scan.",
+        help="Scans 200+ stocks across all industries. May take 30–60 seconds. "
+             "Select specific industries above to speed up the scan.",
     )
 
 # ---------------------------------------------------------------------------
-# Title
+# Title & description
 # ---------------------------------------------------------------------------
-st.title("🔎 Full Market Scanner — KešMani")
-st.caption("Real-time scan of 200+ tickers across all sectors. Powered by KešMani.")
+st.title("🔎 Market Scanner")
+st.caption("Search the entire market — 200+ stocks across every industry.")
+st.markdown(
+    """
+    <div class="km-explainer">
+      <strong>What does this page do?</strong><br>
+      Use this to find stocks across any industry. The system will score each one and show you the best opportunities.
+      Unlike Trade Recommendations (which shows only the top picks), this page shows <em>everything</em> — so you can
+      do your own research and explore.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ---------------------------------------------------------------------------
 # Run scan
 # ---------------------------------------------------------------------------
 _SORT_KEY_MAP = {
-    "Composite Score": ("composite_score", True),
-    "RSI": ("rsi", False),
-    "Volume Ratio": ("volume_ratio", True),
-    "Price": ("price", False),
-    "Day Change %": ("day_change_pct", True),
+    "Best Opportunity (Score)": ("composite_score", True),
+    "Most Momentum (RSI)": ("rsi", False),
+    "Unusual Volume": ("volume_ratio", True),
+    "Price (Low to High)": ("price", False),
+    "Best Day Today": ("day_change_pct", True),
 }
 
 if scan_btn or "scanner_results" not in st.session_state:
@@ -118,12 +156,12 @@ if scan_btn or "scanner_results" not in st.session_state:
     all_results: list[dict] = []
     seen_tickers: set[str] = set()
 
-    with st.status("🔎 Scanning market…", expanded=True) as scan_status:
-        st.write("📡 Fetching market data in parallel…")
-        progress_bar = st.progress(0, text="Initializing…")
+    with st.status("🔍 Searching the market…", expanded=True) as scan_status:
+        st.write("📡 Fetching live market data…")
+        progress_bar = st.progress(0, text="Starting up…")
 
         for i, cat in enumerate(sectors_to_scan):
-            st.write(f"📊 Analyzing sector: **{cat}** ({i + 1}/{len(sectors_to_scan)})")
+            st.write(f"📊 Analyzing: **{cat}** ({i + 1}/{len(sectors_to_scan)})")
             progress_bar.progress((i + 1) / len(sectors_to_scan), text=f"Scanning {cat}…")
             cat_tickers = [t for t in SCAN_UNIVERSE.get(cat, []) if t not in seen_tickers]
             if not cat_tickers:
@@ -141,7 +179,7 @@ if scan_btn or "scanner_results" not in st.session_state:
             except Exception as exc:
                 st.warning(f"Scan failed for {cat}: {exc}")
 
-        st.write(f"✅ Scan complete — {len(all_results)} tickers analyzed.")
+        st.write(f"✅ Done — {len(all_results)} stocks analyzed.")
         scan_status.update(label="✅ Scan complete!", state="complete", expanded=False)
 
     st.session_state["scanner_results"] = all_results
@@ -196,7 +234,7 @@ def _sort_val(s: dict) -> float:
 filtered = sorted(filtered, key=_sort_val, reverse=sort_desc)
 
 # ---------------------------------------------------------------------------
-# Quick Stats Row
+# Quick Stats Row — plain English labels
 # ---------------------------------------------------------------------------
 strong_buys = sum(1 for s in filtered if s["signal"] == "STRONG BUY")
 buys = sum(1 for s in filtered if s["signal"] == "BUY")
@@ -218,12 +256,36 @@ best_sector = sector_rotation[0]["sector"] if sector_rotation else "N/A"
 worst_sector = sector_rotation[-1]["sector"] if sector_rotation else "N/A"
 
 qs_cols = st.columns(6)
-qs_cols[0].metric("Total Scanned", len(filtered))
-qs_cols[1].metric("🚀 Strong Buys", strong_buys)
-qs_cols[2].metric("✅ Buys", buys)
-qs_cols[3].metric("Avg Score", f"{avg_score:.1f}")
-qs_cols[4].metric("🔥 Best Sector", best_sector)
-qs_cols[5].metric("❄️ Worst Sector", worst_sector)
+qs_cols[0].metric(
+    "Stocks Analyzed",
+    len(filtered),
+    help="Total number of stocks shown after applying your filters.",
+)
+qs_cols[1].metric(
+    "🚀 Excellent Opportunities",
+    strong_buys,
+    help="Stocks with STRONG BUY signal — the system's highest-confidence picks.",
+)
+qs_cols[2].metric(
+    "✅ Good Opportunities",
+    buys,
+    help="Stocks with BUY signal — solid opportunities worth considering.",
+)
+qs_cols[3].metric(
+    "Average Health Score",
+    f"{avg_score:.1f}",
+    help="The average composite score across all filtered stocks. 65+ is healthy.",
+)
+qs_cols[4].metric(
+    "🔥 Hottest Industry",
+    best_sector,
+    help="The sector with the highest average score right now — where the best opportunities are concentrated.",
+)
+qs_cols[5].metric(
+    "❄️ Weakest Industry",
+    worst_sector,
+    help="The sector with the lowest average score — consider avoiding stocks in this sector for now.",
+)
 
 st.divider()
 
@@ -232,21 +294,23 @@ st.divider()
 # ---------------------------------------------------------------------------
 top5 = [s for s in filtered if s["signal"] in ("STRONG BUY", "BUY")][:5]
 if top5:
-    st.subheader("🏆 Top Picks")
+    st.subheader("🏆 Today's Top 5 Picks")
+    st.caption("The system's highest-scored stocks right now, based on all available signals.")
+    t = get_theme()
     pick_cols = st.columns(len(top5))
     for col, pick in zip(pick_cols, top5):
         sector_label = pick.get("sector") or _SECTOR_MAP.get(pick["ticker"], "")
         color = signal_color(pick["signal"])
         col.markdown(
             f"""
-            <div style="background:#161b22;border:1px solid {color};border-radius:10px;
-                        padding:12px;text-align:center;">
-              <div style="font-size:1.4em;font-weight:bold;">{pick['ticker']}</div>
-              <div style="color:{color};font-weight:bold;">{signal_emoji(pick['signal'])} {pick['signal']}</div>
-              <div style="font-size:0.85em;color:#8b949e;">{sector_label}</div>
-              <div style="font-size:1.1em;">Score: <b>{pick['composite_score']:.0f}</b></div>
-              <div>Entry: <b>{fmt_currency(pick.get('entry'))}</b></div>
-              <div style="color:#aaa;font-size:0.8em;">Stop: {fmt_currency(pick.get('stop_loss'))} | T1: {fmt_currency(pick.get('target_1'))}</div>
+            <div style="background:{t['surface']};border:1px solid {color};border-radius:10px;
+                        padding:14px;text-align:center;">
+              <div style="font-size:1.4em;font-weight:800;">{pick['ticker']}</div>
+              <div style="color:{color};font-weight:700;margin:4px 0;">{signal_emoji(pick['signal'])} {pick['signal']}</div>
+              <div style="font-size:0.8em;opacity:0.65;margin-bottom:6px;">{sector_label}</div>
+              <div style="font-size:1rem;font-weight:600;">Health Score: <b>{pick['composite_score']:.0f}/100</b></div>
+              <div style="margin-top:4px;">Buy at: <b>{fmt_currency(pick.get('entry'))}</b></div>
+              <div style="font-size:0.8em;opacity:0.7;margin-top:2px;">Stop: {fmt_currency(pick.get('stop_loss'))} | Target: {fmt_currency(pick.get('target_1'))}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -258,7 +322,11 @@ if top5:
 # Sector Rotation Heatmap — Plotly Treemap
 # ---------------------------------------------------------------------------
 if sector_rotation:
-    st.subheader("🌡️ Sector Rotation Heatmap")
+    st.subheader("🌡️ Industry Heatmap")
+    st.caption(
+        "Bigger = more stocks in that industry. "
+        "Greener = more buying opportunities right now. Click a sector to explore."
+    )
     import plotly.express as px
     from dashboard.components.charts import get_chart_layout
 
@@ -297,13 +365,13 @@ if sector_rotation:
     tree_fig.update_traces(
         hovertemplate=(
             "<b>%{label}</b><br>"
-            "Avg Score: %{customdata[0]:.1f}<br>"
+            "Health Score: %{customdata[0]:.1f}/100<br>"
             "Strong Buys: %{customdata[1]}<br>"
             "Buys: %{customdata[2]}<br>"
-            "Best: %{customdata[3]}"
+            "Best Stock: %{customdata[3]}"
             "<extra></extra>"
         ),
-        texttemplate="%{label}<br>%{value} tickers",
+        texttemplate="%{label}<br>%{value} stocks",
     )
     layout = get_chart_layout()
     tree_fig.update_layout(
@@ -314,6 +382,7 @@ if sector_rotation:
         coloraxis_showscale=True,
     )
     st.plotly_chart(tree_fig, use_container_width=True)
+    st.caption("💡 Green sectors have the most buying opportunities right now. Focus your research there.")
     st.markdown("")
 
 st.divider()
@@ -321,10 +390,24 @@ st.divider()
 # ---------------------------------------------------------------------------
 # Full Results Table
 # ---------------------------------------------------------------------------
-st.subheader(f"📊 Scan Results ({len(filtered)} tickers)")
+st.subheader(f"📊 All Results ({len(filtered)} stocks)")
 
 if not filtered:
-    st.info("No results match your filters. Try broadening the criteria.")
+    st.markdown(
+        """
+        <div class="km-explainer">
+          <strong>No stocks match your current filters</strong><br><br>
+          Try loosening your search criteria:
+          <ul style="margin-top:8px;">
+            <li>Remove the signal filter (or select more signal types)</li>
+            <li>Lower the Minimum Health Score to 0</li>
+            <li>Deselect the industry filter to search all sectors</li>
+            <li>Click "Search the Market Now" to run a fresh scan</li>
+          </ul>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 else:
     from src.analysis.execution import generate_execution_plan
 
@@ -347,66 +430,142 @@ else:
         risk_d = sig.get("risk_amount", 0.0)
         color = signal_color(signal_val)
 
-        with st.expander(f"{signal_emoji(signal_val)} {ticker} — {signal_val} | Score: {score:.0f} | {fmt_currency(entry)} | {sector_label}"):
-            # Row 1: key metrics
+        # Score label
+        if score >= 80:
+            score_label = "Excellent 🚀"
+        elif score >= 65:
+            score_label = "Good ✅"
+        elif score >= 50:
+            score_label = "Fair 🔶"
+        else:
+            score_label = "Weak ❄️"
+
+        expander_label = (
+            f"{signal_emoji(signal_val)} {ticker} — {signal_val} | "
+            f"Health Score: {score:.0f}/100 ({score_label}) | "
+            f"Price: {fmt_currency(entry)} | {sector_label}"
+        )
+
+        with st.expander(expander_label):
+            # Reasoning first — most important for beginners
+            if sig.get("reasoning"):
+                st.markdown(
+                    f"""
+                    <div class="km-explainer">
+                      <strong>💡 Why the system flagged this stock:</strong><br>
+                      {sig['reasoning']}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            # Row 1: key metrics — plain English
             r1_cols = st.columns(8)
-            r1_cols[0].metric("Signal", signal_val)
-            r1_cols[1].metric("Score", f"{score:.0f}")
-            r1_cols[2].metric("Entry", fmt_currency(entry))
-            r1_cols[3].metric("Stop", fmt_currency(stop))
-            r1_cols[4].metric("Target 1", fmt_currency(t1))
-            r1_cols[5].metric("Target 2", fmt_currency(t2))
-            r1_cols[6].metric("RSI", f"{rsi_val:.1f}" if rsi_val else "N/A")
-            r1_cols[7].metric("Vol Ratio", f"{vol_ratio:.2f}x" if vol_ratio else "N/A")
+            r1_cols[0].metric(
+                "Recommendation",
+                signal_val,
+                help="The system's recommendation for this stock.",
+            )
+            r1_cols[1].metric(
+                "Health Score",
+                f"{score:.0f}/100",
+                help=jargon_tooltip("composite score"),
+            )
+            r1_cols[2].metric(
+                "Buy At",
+                fmt_currency(entry),
+                help="The target price to place your buy order.",
+            )
+            r1_cols[3].metric(
+                "Sell If Drops To",
+                fmt_currency(stop),
+                help=jargon_tooltip("stop loss"),
+            )
+            r1_cols[4].metric(
+                "First Target",
+                fmt_currency(t1),
+                help=jargon_tooltip("target"),
+            )
+            r1_cols[5].metric(
+                "Full Target",
+                fmt_currency(t2),
+            )
+            r1_cols[6].metric(
+                "RSI (Momentum)",
+                f"{rsi_val:.1f}" if rsi_val else "N/A",
+                help=jargon_tooltip("RSI"),
+            )
+            r1_cols[7].metric(
+                "Volume Surge",
+                f"{vol_ratio:.2f}x" if vol_ratio else "N/A",
+                help="How much higher today's trading volume is compared to the average. 2x = twice the normal volume.",
+            )
 
             # Row 2: position info
             r2_cols = st.columns(4)
-            r2_cols[0].metric("Shares to Buy", shares)
-            r2_cols[1].metric("Total Cost", fmt_currency(position_val))
-            r2_cols[2].metric("Risk $", fmt_currency(risk_d))
-            r2_cols[3].metric("Trend", trend)
-
-            # Reasoning
-            if sig.get("reasoning"):
-                st.caption(f"📝 {sig['reasoning']}")
+            r2_cols[0].metric(
+                "Shares to Buy",
+                shares,
+                help=f"Based on your ${account_size:,.0f} account, risking 2% per trade.",
+            )
+            r2_cols[1].metric(
+                "Total Cost",
+                fmt_currency(position_val),
+                help="Total amount you'd spend to buy these shares.",
+            )
+            r2_cols[2].metric(
+                "Max You Could Lose",
+                fmt_currency(risk_d),
+                help="Your maximum loss if the stop loss triggers.",
+            )
+            r2_cols[3].metric(
+                "Trend Direction",
+                trend,
+                help="Is the stock in an uptrend, downtrend, or sideways trend?",
+            )
 
             # Earnings / VIX warnings
             if sig.get("earnings_warning"):
-                st.warning("⚠️ Earnings expected within 7 days — use caution.")
+                st.warning("⚠️ Earnings report expected within 7 days — stock could move sharply in either direction. Use extra caution.")
             if sig.get("vix_adjusted"):
                 st.warning(sig["vix_adjusted"])
 
             # Execution plan
             st.markdown("---")
-            st.markdown("#### 📋 Execution Plan")
+            st.markdown("#### 📋 How to Execute This Trade")
             try:
                 plan = generate_execution_plan(sig, account_size)
 
                 ep_cols = st.columns(3)
-                ep_cols[0].metric("Order Type", plan["order_type"])
+                ep_cols[0].metric(
+                    "How to Place the Order",
+                    plan["order_type"],
+                    help="Limit order = you set the exact price. Market order = you buy at whatever the current price is. Limit orders are safer.",
+                )
                 ep_cols[1].metric("Limit Price", fmt_currency(plan["limit_price"]))
                 ep_cols[2].metric("Entry Strategy", plan["entry_strategy"].replace("_", " ").title())
 
-                st.caption(f"🕐 **Timing:** {plan['timing']}")
-                st.caption(f"🛡️ **Stop Type:** {plan['stop_loss_type'].replace('_', ' ').title()} at {fmt_currency(plan['stop_loss_price'])}")
-                st.caption(f"💰 **Partial Profit Plan:** {plan['partial_profit_plan']}")
+                st.caption(f"🕐 **Best time to enter:** {plan['timing']}")
+                st.caption(f"🛡️ **Stop Loss Type:** {plan['stop_loss_type'].replace('_', ' ').title()} at {fmt_currency(plan['stop_loss_price'])}")
+                st.caption(f"💰 **Profit Taking Plan:** {plan['partial_profit_plan']}")
 
                 # Scale-in plan
                 if plan.get("scale_in_plan"):
-                    st.markdown("**Scale-In Tranches:**")
+                    st.markdown("**Buying in Stages (Scale-In Plan):**")
                     for t in plan["scale_in_plan"]:
                         st.markdown(
-                            f"- Tranche {t['tranche']} ({t['pct']}): **{t['shares']} shares** "
-                            f"at ~${t['price']:,.2f} — {t['trigger']}"
+                            f"- Stage {t['tranche']} ({t['pct']}): **{t['shares']} shares** "
+                            f"at ~${t['price']:,.2f} — trigger: {t['trigger']}"
                         )
 
                 # Broker steps
-                with st.expander("🖥️ Step-by-Step Broker Instructions"):
+                with st.expander("🖥️ How to buy this stock (step by step)"):
+                    st.caption("These steps work for most online brokers (Fidelity, Schwab, TD Ameritrade, etc.)")
                     for j, step in enumerate(plan["broker_steps"], 1):
                         st.markdown(f"**{j}.** {step}")
 
                 # Checklist
-                with st.expander("✅ Pre-Trade Checklist"):
+                with st.expander("✅ Check these things before buying"):
                     for item in plan["checklist"]:
                         st.markdown(item)
 
@@ -418,3 +577,4 @@ else:
 
             except Exception as exc:
                 st.error(f"Could not generate execution plan: {exc}")
+

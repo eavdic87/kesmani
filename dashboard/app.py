@@ -124,97 +124,7 @@ with st.sidebar:
     st.caption("⚠️ For informational purposes only. Not financial advice.")
 
 # ---------------------------------------------------------------------------
-# Home page content
-# ---------------------------------------------------------------------------
-st.markdown(
-    "<h1 style='font-size:2.5rem;margin-bottom:0;'>📈 KešMani</h1>"
-    "<p style='font-size:1.1rem;opacity:0.7;margin-top:4px;'>Trading Intelligence System</p>",
-    unsafe_allow_html=True,
-)
-st.markdown("---")
-
-# Quick navigation cards
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.markdown(
-        """
-        <div class="km-card">
-        <h3>🌍 Market Overview</h3>
-        <p>Market regime, benchmark performance, sector rotation heatmap, and breadth analysis.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with col2:
-    st.markdown(
-        """
-        <div class="km-card">
-        <h3>🎯 Trade Recommendations</h3>
-        <p>VP-level trade setups with entry, stop, targets, and step-by-step execution guides.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with col3:
-    st.markdown(
-        """
-        <div class="km-card">
-        <h3>🔎 Market Scanner</h3>
-        <p>Full 200+ ticker universe scan with sector, signal, and score filtering.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-col4, col5, col6 = st.columns(3)
-
-with col4:
-    st.markdown(
-        """
-        <div class="km-card">
-        <h3>📊 Stock Detail</h3>
-        <p>Candlestick charts, RSI, MACD, Bollinger Bands, and signal analysis for any ticker.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with col5:
-    st.markdown(
-        """
-        <div class="km-card">
-        <h3>💼 Portfolio Monitor</h3>
-        <p>Live P&amp;L tracking, stop/target alerts, trailing stops, and portfolio heat gauge.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with col6:
-    st.markdown(
-        """
-        <div class="km-card">
-        <h3>📋 Daily Brief</h3>
-        <p>Auto-generated morning report with market regime, top picks, and key levels to watch.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-st.markdown("---")
-st.markdown(
-    """
-    > ⚠️ **Disclaimer:** KešMani is a trading intelligence tool, not financial advice.
-    > All trading carries risk. Never risk more than you can afford to lose.
-    > Always do your own research before entering any trade.
-    """
-)
-
-# ---------------------------------------------------------------------------
-# Data freshness footer
+# Helper: cache freshness
 # ---------------------------------------------------------------------------
 from config.settings import CACHE_DIR
 import time as _t
@@ -238,6 +148,183 @@ def _get_cache_freshness() -> str:
     except Exception:
         return "Unknown"
 
+# ---------------------------------------------------------------------------
+# Home page content
+# ---------------------------------------------------------------------------
+# First-visit banner
+if not st.session_state.get("onboarding_dismissed"):
+    st.markdown(
+        """
+        <div style="background:linear-gradient(135deg,#2563EB,#7C3AED);border-radius:14px;
+                    padding:20px 28px;margin-bottom:20px;color:white;display:flex;
+                    align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div style="font-size:1.4rem;font-weight:800;margin-bottom:4px;">👋 First time here? Start here →</div>
+            <div style="opacity:0.9;font-size:0.95rem;">KešMani helps you find good stocks to buy, tells you exactly how many shares to get, and warns you when it's time to sell.</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("✅ Got it — don't show this again", key="dismiss_onboarding"):
+        st.session_state["onboarding_dismissed"] = True
+        st.rerun()
+
+st.markdown(
+    "<h1 style='font-size:2.5rem;margin-bottom:0;'>📈 KešMani</h1>"
+    "<p style='font-size:1.1rem;opacity:0.7;margin-top:4px;'>Your personal Trading Intelligence System — built for everyone, not just experts.</p>",
+    unsafe_allow_html=True,
+)
 st.markdown("---")
-freshness = _get_cache_freshness()
-st.caption(f"🕐 Data as of: **{freshness}** &nbsp;|&nbsp; ⚠️ For informational purposes only. Not financial advice.")
+
+# ── Live status bar ────────────────────────────────────────────────────────
+from config.settings import SCAN_UNIVERSE as _SU
+_total_tracked = sum(len(v) for v in _SU.values())
+status_col1, status_col2, status_col3, status_col4 = st.columns(4)
+with status_col1:
+    st.markdown(market_status_html(is_open), unsafe_allow_html=True)
+with status_col2:
+    freshness_status = _get_cache_freshness()
+    st.caption(f"🕐 Last data: **{freshness_status}**")
+with status_col3:
+    st.caption(f"📊 Stocks tracked: **{_total_tracked}+**")
+with status_col4:
+    acct_display = f"${st.session_state.get('account_size', 5000):,.0f}"
+    st.caption(f"💰 Your account: **{acct_display}**")
+
+st.markdown("---")
+
+# ── Where do you want to start? ───────────────────────────────────────────
+st.markdown("### 🗺️ Where do you want to start?")
+st.caption("Follow these steps in order for the best experience.")
+
+step_col1, step_col2, step_col3 = st.columns(3)
+
+with step_col1:
+    st.markdown(
+        """
+        <div class="km-card" style="border-top:4px solid #3B82F6;text-align:center;">
+        <div style="font-size:2rem;margin-bottom:8px;">🌍</div>
+        <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;opacity:0.6;margin-bottom:4px;">Step 1</div>
+        <h3 style="margin:0 0 8px 0;">Check the Market First</h3>
+        <p>See if today is a good day to be buying stocks, or if you should wait.</p>
+        <p style="font-size:0.82rem;font-style:italic;opacity:0.7;">→ Market Overview page</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with step_col2:
+    st.markdown(
+        """
+        <div class="km-card" style="border-top:4px solid #10B981;text-align:center;">
+        <div style="font-size:2rem;margin-bottom:8px;">🎯</div>
+        <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;opacity:0.6;margin-bottom:4px;">Step 2</div>
+        <h3 style="margin:0 0 8px 0;">Find Stocks to Buy</h3>
+        <p>The system will find the best opportunities right now and tell you exactly how many shares to buy and where to set your safety net.</p>
+        <p style="font-size:0.82rem;font-style:italic;opacity:0.7;">→ Trade Recommendations page</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with step_col3:
+    st.markdown(
+        """
+        <div class="km-card" style="border-top:4px solid #8B5CF6;text-align:center;">
+        <div style="font-size:2rem;margin-bottom:8px;">💼</div>
+        <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;opacity:0.6;margin-bottom:4px;">Step 3</div>
+        <h3 style="margin:0 0 8px 0;">Track What You Own</h3>
+        <p>See how your stocks are doing and get alerts when it's time to sell.</p>
+        <p style="font-size:0.82rem;font-style:italic;opacity:0.7;">→ Portfolio Monitor page</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.markdown("---")
+
+# ── How KešMani Works ─────────────────────────────────────────────────────
+with st.expander("📖 How KešMani Works — 4 simple steps", expanded=False):
+    st.markdown(
+        """
+        <div class="km-step">
+          <div class="km-step-number">1</div>
+          <div class="km-step-body"><strong>Check if the market is in good shape</strong><br>
+          Go to <em>Market Overview</em>. If the regime is BULLISH, it's a good time to look for buys.
+          If it's BEARISH, be cautious.</div>
+        </div>
+        <div class="km-step">
+          <div class="km-step-number">2</div>
+          <div class="km-step-body"><strong>Find stocks the system rates highly</strong><br>
+          Go to <em>Trade Recommendations</em>. Click "Find Me Good Stocks to Buy". The system scans 80+ stocks and shows you the best setups.</div>
+        </div>
+        <div class="km-step">
+          <div class="km-step-number">3</div>
+          <div class="km-step-body"><strong>Review the trade plan — entry, stop loss, how many shares</strong><br>
+          Each recommendation card shows the buy price, your safety net (stop loss), and exactly how many shares to buy based on your account size.</div>
+        </div>
+        <div class="km-step">
+          <div class="km-step-number">4</div>
+          <div class="km-step-body"><strong>Track your positions and act on alerts</strong><br>
+          After you buy, add the stock to <em>Portfolio Monitor</em>. KešMani will alert you when it hits your target (take profits!) or stop loss (sell to limit losses).</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+# ── Additional tools ───────────────────────────────────────────────────────
+st.markdown("### 🔧 More Tools")
+extra_col1, extra_col2, extra_col3 = st.columns(3)
+
+with extra_col1:
+    st.markdown(
+        """
+        <div class="km-card" style="border-top:4px solid #F59E0B;text-align:center;">
+        <div style="font-size:2rem;margin-bottom:8px;">🔎</div>
+        <h3 style="margin:0 0 8px 0;">Search the Whole Market</h3>
+        <p>Browse 200+ stocks across every industry. Filter by sector, signal, or price.</p>
+        <p style="font-size:0.82rem;font-style:italic;opacity:0.7;">→ Market Scanner page</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with extra_col2:
+    st.markdown(
+        """
+        <div class="km-card" style="border-top:4px solid #6B7280;text-align:center;">
+        <div style="font-size:2rem;margin-bottom:8px;">📊</div>
+        <h3 style="margin:0 0 8px 0;">Dive Into Any Stock</h3>
+        <p>Detailed charts, RSI, MACD, and Bollinger Bands for any ticker you want to investigate.</p>
+        <p style="font-size:0.82rem;font-style:italic;opacity:0.7;">→ Stock Detail page</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with extra_col3:
+    st.markdown(
+        """
+        <div class="km-card" style="border-top:4px solid #EC4899;text-align:center;">
+        <div style="font-size:2rem;margin-bottom:8px;">📋</div>
+        <h3 style="margin:0 0 8px 0;">Daily Market Brief</h3>
+        <p>Auto-generated morning report with market regime, top picks, and key levels to watch.</p>
+        <p style="font-size:0.82rem;font-style:italic;opacity:0.7;">→ Daily Brief page</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.markdown("---")
+st.markdown(
+    """
+    > ⚠️ **Important:** KešMani gives you information and analysis — it does **not** guarantee profits.
+    > All investing carries risk and you could lose money. The system's recommendations are for
+    > informational purposes only. Always make your own decisions, start with small amounts while
+    > you learn, and never invest money you can't afford to lose.
+    """
+)
+
+st.markdown("---")
+st.caption("⚠️ For informational purposes only. Not financial advice.")
