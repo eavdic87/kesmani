@@ -25,26 +25,16 @@ from src.analysis.technical import (
 # ---------------------------------------------------------------------------
 
 _DARK_COLORS = dict(
-    paper_bgcolor="#0d1117",
-    plot_bgcolor="#0d1117",
-    font_color="#c9d1d9",
-    grid_color="#30363d",
-    legend_bgcolor="#161b22",
-    legend_bordercolor="#30363d",
+    paper_bgcolor="#0F172A",
+    plot_bgcolor="#0F172A",
+    font_color="#F1F5F9",
+    grid_color="#334155",
+    legend_bgcolor="#1E293B",
+    legend_bordercolor="#334155",
     candle_up="#00cc44",
     candle_down="#cc0000",
 )
 
-_LIGHT_COLORS = dict(
-    paper_bgcolor="#FFFFFF",
-    plot_bgcolor="#F8F9FA",
-    font_color="#212529",
-    grid_color="#DEE2E6",
-    legend_bgcolor="#F8F9FA",
-    legend_bordercolor="#DEE2E6",
-    candle_up="#10B981",
-    candle_down="#EF4444",
-)
 
 # Keep DARK_LAYOUT for backward compatibility
 DARK_LAYOUT = dict(
@@ -60,12 +50,9 @@ DARK_LAYOUT = dict(
 
 def get_chart_layout() -> dict:
     """
-    Return a Plotly layout dict that matches the current Streamlit theme.
-
-    Uses dark colors when ``st.session_state.dark_mode`` is True.
+    Return a Plotly layout dict that matches the KešMani dark theme.
     """
-    is_dark = st.session_state.get("dark_mode", False)
-    c = _DARK_COLORS if is_dark else _LIGHT_COLORS
+    c = _DARK_COLORS
     return dict(
         paper_bgcolor=c["paper_bgcolor"],
         plot_bgcolor=c["plot_bgcolor"],
@@ -79,8 +66,7 @@ def get_chart_layout() -> dict:
 
 def _candle_colors() -> tuple[str, str]:
     """Return (up_color, down_color) for the active theme."""
-    is_dark = st.session_state.get("dark_mode", False)
-    c = _DARK_COLORS if is_dark else _LIGHT_COLORS
+    c = _DARK_COLORS
     return c["candle_up"], c["candle_down"]
 
 

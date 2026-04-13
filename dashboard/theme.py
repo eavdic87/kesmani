@@ -1,29 +1,15 @@
 """
 KešMani — Centralized theme and design system.
 
-Provides light/dark mode colors, CSS injection, and UI helper functions.
+Dark-mode only. Provides CSS injection and UI helper functions.
 All dashboard pages import from this single source for consistent styling.
 """
 
 import streamlit as st
 
 # ---------------------------------------------------------------------------
-# Color palettes
+# Color palette — dark only
 # ---------------------------------------------------------------------------
-
-LIGHT = {
-    "bg": "#FFFFFF",
-    "surface": "#F8F9FA",
-    "border": "#E9ECEF",
-    "text_primary": "#212529",
-    "text_secondary": "#6C757D",
-    "accent": "#2563EB",
-    "success": "#10B981",
-    "danger": "#EF4444",
-    "warning": "#F59E0B",
-    "hold": "#6B7280",
-    "card_shadow": "0 1px 3px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.06)",
-}
 
 DARK = {
     "bg": "#0F172A",
@@ -66,250 +52,124 @@ _CONFIDENCE_COLORS = {
 
 
 def get_theme() -> dict:
-    """Return the active theme palette based on session_state dark_mode."""
-    if st.session_state.get("dark_mode", False):
-        return DARK
-    return LIGHT
+    """Always returns the dark theme — KešMani is dark-mode only."""
+    return DARK
 
 
 def apply_theme() -> None:
-    """Inject CSS for the active theme into the Streamlit app."""
-    t = get_theme()
-    is_dark = st.session_state.get("dark_mode", False)
-    sidebar_bg = t["surface"] if not is_dark else "#0F172A"
-
-    css = f"""
+    """Inject dark-mode CSS into the Streamlit app."""
+    css = """
     <style>
-    /* ── Base ── */
-    .stApp {{
-        background-color: {t["bg"]};
-        color: {t["text_primary"]};
-    }}
-    [data-testid="stSidebar"] {{
-        background-color: {sidebar_bg};
-        border-right: 1px solid {t["border"]};
-    }}
-    [data-testid="stSidebar"] * {{
-        color: {t["text_primary"]} !important;
-    }}
+    /* Base */
+    .stApp { background-color: #0F172A; color: #F1F5F9; }
+    [data-testid="stSidebar"] { background-color: #0F172A; border-right: 1px solid #334155; }
+    [data-testid="stSidebar"] * { color: #F1F5F9 !important; }
 
-    /* ── Mobile responsive sidebar ── */
-    @media (max-width: 768px) {{
-        [data-testid="stSidebar"] {{
-            width: 100% !important;
-        }}
+    /* Mobile responsive sidebar */
+    @media (max-width: 768px) {
+        [data-testid="stSidebar"] { width: 100% !important; }
         [data-testid="stSidebar"] .stSelectbox,
         [data-testid="stSidebar"] .stNumberInput,
-        [data-testid="stSidebar"] .stSlider {{
-            width: 100% !important;
-        }}
-    }}
+        [data-testid="stSidebar"] .stSlider { width: 100% !important; }
+    }
 
-    /* ── Cards ── */
-    .km-card {{
-        background: {t["surface"]};
-        border: 1px solid {t["border"]};
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 16px;
-        box-shadow: {t["card_shadow"]};
-    }}
-    .km-card-compact {{
-        background: {t["surface"]};
-        border: 1px solid {t["border"]};
-        border-radius: 8px;
-        padding: 12px 16px;
-        margin-bottom: 8px;
-    }}
+    /* Main content area */
+    .main .block-container { background-color: #0F172A; }
 
-    /* ── Hero card — the most important element on each page ── */
-    .km-hero-card {{
-        background: {t["surface"]};
-        border: 2px solid {t["accent"]};
-        border-radius: 16px;
-        padding: 28px 32px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-        text-align: center;
-    }}
+    /* Cards */
+    .km-card { background: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); color: #F1F5F9; }
+    .km-card h3, .km-card h4, .km-card p { color: #F1F5F9 !important; }
+    .km-card-compact { background: #1E293B; border: 1px solid #334155; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; color: #F1F5F9; }
 
-    /* ── Explainer / "What does this mean?" box ── */
-    .km-explainer {{
-        background: #EFF6FF;
-        border: 1px solid #BFDBFE;
-        border-left: 4px solid #3B82F6;
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin-bottom: 16px;
-        color: #1E3A5F;
-    }}
+    /* Hero card */
+    .km-hero-card { background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%); border: 2px solid #3B82F6; border-radius: 16px; padding: 28px 32px; margin-bottom: 20px; box-shadow: 0 8px 32px rgba(59,130,246,0.2); text-align: center; color: #F1F5F9; }
 
-    /* ── Numbered step guide ── */
-    .km-step {{
-        background: {t["surface"]};
-        border: 1px solid {t["border"]};
-        border-radius: 10px;
-        padding: 14px 18px;
-        margin-bottom: 10px;
-        display: flex;
-        align-items: flex-start;
-        gap: 14px;
-    }}
-    .km-step-number {{
-        background: {t["accent"]};
-        color: white;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        min-width: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        font-size: 1rem;
-    }}
-    .km-step-body {{
-        flex: 1;
-    }}
+    /* Explainer — dark blue tint, readable */
+    .km-explainer { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.3); border-left: 4px solid #3B82F6; border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; color: #BFDBFE; }
+    .km-explainer strong { color: #93C5FD; }
 
-    /* ── Beginner tip ── */
-    .km-beginner-tip {{
-        background: #FFFBEB;
-        border: 1px solid #FDE68A;
-        border-left: 4px solid #F59E0B;
-        border-radius: 10px;
-        padding: 12px 16px;
-        margin-bottom: 12px;
-        font-style: italic;
-        color: #78350F;
-    }}
+    /* Step guide */
+    .km-step { background: #1E293B; border: 1px solid #334155; border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 14px; color: #F1F5F9; }
+    .km-step-number { background: #3B82F6; color: white; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem; }
+    .km-step-body { flex: 1; color: #F1F5F9; }
+    .km-step-body strong { color: #F1F5F9; }
 
-    /* ── Inline colored highlights ── */
-    .km-highlight-green {{
-        color: #10B981;
-        font-weight: 600;
-    }}
-    .km-highlight-red {{
-        color: #EF4444;
-        font-weight: 600;
-    }}
-    .km-highlight-yellow {{
-        color: #F59E0B;
-        font-weight: 600;
-    }}
+    /* Beginner tip — warm amber tint, readable */
+    .km-beginner-tip { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3); border-left: 4px solid #F59E0B; border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; font-style: italic; color: #FDE68A; }
 
-    /* ── Action needed card ── */
-    .km-action-card {{
-        border-radius: 12px;
-        padding: 16px 20px;
-        margin-bottom: 12px;
-        border: 2px solid;
-    }}
+    /* Inline colored highlights */
+    .km-highlight-green { color: #10B981; font-weight: 600; }
+    .km-highlight-red { color: #EF4444; font-weight: 600; }
+    .km-highlight-yellow { color: #F59E0B; font-weight: 600; }
 
-    /* ── Metrics ── */
-    div[data-testid="metric-container"] {{
-        background-color: {t["surface"]};
-        border: 1px solid {t["border"]};
-        border-radius: 12px;
-        padding: 16px;
-        box-shadow: {t["card_shadow"]};
-    }}
-    .stMetric label {{
-        color: {t["text_secondary"]} !important;
-        font-size: 0.85rem !important;
-    }}
-    .stMetric [data-testid="metric-value"] {{
-        color: {t["text_primary"]} !important;
-    }}
+    /* Action card */
+    .km-action-card { border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; border: 2px solid; }
 
-    /* ── Badges ── */
-    .km-badge {{
-        display: inline-block;
-        padding: 6px 16px;
-        border-radius: 9999px;
-        font-size: 0.9rem;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-    }}
-    .km-badge-strong-buy {{ background: #10B981; color: white; }}
-    .km-badge-buy {{ background: #34D399; color: white; }}
-    .km-badge-hold {{ background: #6B7280; color: white; }}
-    .km-badge-sell {{ background: #EF4444; color: white; }}
-    .km-badge-avoid {{ background: #B91C1C; color: white; }}
+    /* Metrics */
+    div[data-testid="metric-container"] { background-color: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .stMetric label { color: #94A3B8 !important; font-size: 0.85rem !important; }
+    .stMetric [data-testid="metric-value"] { color: #F1F5F9 !important; }
+    .stMetric [data-testid="metric-delta"] { font-size: 0.82rem !important; }
 
-    /* ── Signal tag block (badge + subtitle) ── */
-    .km-signal-tag {{
-        display: inline-block;
-        text-align: center;
-    }}
-    .km-signal-subtitle {{
-        display: block;
-        font-size: 0.75rem;
-        color: {t["text_secondary"]};
-        margin-top: 4px;
-        font-style: italic;
-    }}
+    /* Badges */
+    .km-badge { display: inline-block; padding: 6px 16px; border-radius: 9999px; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .km-badge-strong-buy { background: #10B981; color: white; }
+    .km-badge-buy { background: #34D399; color: #064E3B; }
+    .km-badge-hold { background: #4B5563; color: #F9FAFB; }
+    .km-badge-sell { background: #EF4444; color: white; }
+    .km-badge-avoid { background: #991B1B; color: #FEE2E2; }
 
-    /* ── Urgency badges — only NOW pulses ── */
-    .km-urgency-now {{ background: #EF4444; color: white; animation: pulse 1.5s infinite; }}
-    .km-urgency-today {{ background: #F59E0B; color: white; }}
-    .km-urgency-this-week {{ background: #3B82F6; color: white; }}
-    .km-urgency-watch {{ background: #6B7280; color: white; }}
+    /* Signal tag block (badge + subtitle) */
+    .km-signal-tag { display: inline-block; text-align: center; }
+    .km-signal-subtitle { display: block; font-size: 0.75rem; color: #94A3B8; margin-top: 4px; font-style: italic; }
 
-    @keyframes pulse {{
-        0%, 100% {{ opacity: 1; }}
-        50% {{ opacity: 0.6; }}
-    }}
+    /* Urgency */
+    .km-urgency-now { background: #EF4444; color: white; animation: pulse 1.5s infinite; }
+    .km-urgency-today { background: #D97706; color: white; }
+    .km-urgency-this-week { background: #3B82F6; color: white; }
+    .km-urgency-watch { background: #4B5563; color: white; }
 
-    /* ── Data table ── */
-    .stDataFrame {{
-        border: 1px solid {t["border"]};
-        border-radius: 8px;
-    }}
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
-    /* ── Buttons ── */
-    .stButton > button {{
-        border-radius: 8px;
-        font-weight: 600;
-    }}
+    /* Tables */
+    .stDataFrame { border: 1px solid #334155; border-radius: 8px; }
+    .stDataFrame thead th { background-color: #1E293B !important; color: #94A3B8 !important; }
+    .stDataFrame tbody tr:nth-child(even) { background-color: rgba(30,41,59,0.5); }
 
-    /* ── Tabs ── */
-    .stTabs [data-baseweb="tab-list"] {{
-        background-color: {t["surface"]};
-        border-radius: 8px;
-        padding: 4px;
-    }}
-    .stTabs [data-baseweb="tab"] {{
-        color: {t["text_secondary"]};
-    }}
-    .stTabs [aria-selected="true"] {{
-        color: {t["accent"]};
-    }}
+    /* Inputs and selects */
+    .stSelectbox > div > div { background-color: #1E293B !important; color: #F1F5F9 !important; border-color: #334155 !important; }
+    .stMultiSelect > div > div { background-color: #1E293B !important; border-color: #334155 !important; }
+    .stNumberInput > div > div > input { background-color: #1E293B !important; color: #F1F5F9 !important; border-color: #334155 !important; }
+    .stTextInput > div > div > input { background-color: #1E293B !important; color: #F1F5F9 !important; border-color: #334155 !important; }
+    .stSlider > div { color: #F1F5F9; }
 
-    /* ── Expander ── */
-    .streamlit-expanderHeader {{
-        background-color: {t["surface"]};
-        border-radius: 8px;
-    }}
+    /* Buttons */
+    .stButton > button { border-radius: 8px; font-weight: 600; background-color: #1E293B; color: #F1F5F9; border: 1px solid #334155; }
+    .stButton > button:hover { background-color: #334155; border-color: #3B82F6; }
+    button[kind="primary"] { background-color: #3B82F6 !important; color: white !important; border: none !important; }
+    button[kind="primary"]:hover { background-color: #2563EB !important; }
 
-    /* ── Progress bars ── */
-    .stProgress > div > div > div > div {{
-        background-color: {t["accent"]};
-    }}
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] { background-color: #1E293B; border-radius: 8px; padding: 4px; }
+    .stTabs [data-baseweb="tab"] { color: #94A3B8; }
+    .stTabs [aria-selected="true"] { color: #3B82F6; }
+    .stTabs [data-baseweb="tab-panel"] { background-color: transparent; }
 
-    /* ── Selectbox, inputs ── */
-    .stSelectbox > div, .stMultiSelect > div {{
-        background-color: {t["surface"]};
-    }}
+    /* Expander */
+    .streamlit-expanderHeader { background-color: #1E293B; border-radius: 8px; color: #F1F5F9; }
+    .streamlit-expanderContent { background-color: #1E293B; border: 1px solid #334155; border-radius: 0 0 8px 8px; }
 
-    /* ── Headers ── */
-    h1, h2, h3 {{
-        color: {t["text_primary"]};
-    }}
-    p, li {{
-        color: {t["text_secondary"]};
-    }}
+    /* Progress bars */
+    .stProgress > div > div > div > div { background-color: #3B82F6; }
+
+    /* Dividers */
+    hr { border-color: #334155 !important; }
+
+    /* Text */
+    h1, h2, h3, h4, h5, h6 { color: #F1F5F9 !important; }
+    p { color: #94A3B8; }
+    label { color: #94A3B8 !important; }
+    .stCaption { color: #64748B !important; }
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
@@ -330,12 +190,10 @@ def signal_color(signal: str, mode: str = "bg") -> str:
     mode:
         "bg" → background hex, "text" → text hex.
     """
-    is_dark = st.session_state.get("dark_mode", False)
     is_cb = st.session_state.get("colorblind_mode", False)
-    key = "dark" if is_dark else "light"
     palette = _CB_SIGNAL_COLORS if is_cb else _SIGNAL_COLORS
     colors = palette.get(signal.upper(), {"light": "#6B7280", "dark": "#9CA3AF"})
-    return colors[key]
+    return colors["dark"]
 
 
 def score_color(score: float) -> str:
@@ -432,10 +290,10 @@ def render_score_bar(score: float, label: str = "") -> None:
     st.markdown(
         f"""
         <div style="margin-bottom:4px;">
-            <span style="font-size:0.8rem;color:var(--text-secondary);">{label}</span>
-            <span style="float:right;font-size:0.8rem;font-weight:600;color:{color};">{score:.0f}</span>
+            <span style="font-size:0.8rem;color:#94A3B8;">{label}</span>
+            <span style="float:right;font-size:0.8rem;font-weight:600;color:{color};">{score:.0f}/100</span>
         </div>
-        <div style="background:#E9ECEF;border-radius:4px;height:6px;margin-bottom:12px;">
+        <div style="background:#334155;border-radius:4px;height:6px;margin-bottom:12px;">
             <div style="width:{score}%;background:{color};height:6px;border-radius:4px;"></div>
         </div>
         """,
@@ -451,11 +309,11 @@ def render_confidence_bar(confidence: float) -> None:
     st.markdown(
         f"""
         <div style="margin-bottom:4px;">
-            <span style="font-size:0.8rem;">Confidence</span>
+            <span style="font-size:0.8rem;color:#94A3B8;">System Confidence</span>
             <span style="float:right;font-size:0.8rem;font-weight:600;color:{color};">{pct:.0f}% — {label}</span>
         </div>
-        <div style="background:#E9ECEF;border-radius:4px;height:8px;margin-bottom:12px;">
-            <div style="width:{pct}%;background:{color};height:8px;border-radius:4px;"></div>
+        <div style="background:#334155;border-radius:4px;height:10px;margin-bottom:12px;">
+            <div style="width:{pct}%;background:{color};height:10px;border-radius:4px;"></div>
         </div>
         """,
         unsafe_allow_html=True,
