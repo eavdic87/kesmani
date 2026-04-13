@@ -362,7 +362,7 @@ with st.form("add_position_form"):
             if exceeds:
                 st.warning(
                     "⚠️ Adding this position would push your portfolio heat above the safe limit. "
-                    "Consider buying fewer shares to stay within your 2% risk limit."
+                    "Consider buying fewer shares to reduce your total risk."
                 )
             add_position(
                 f_ticker, f_entry, f_shares, f_stop,

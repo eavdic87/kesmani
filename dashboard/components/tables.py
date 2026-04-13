@@ -9,6 +9,15 @@ import streamlit as st
 from src.utils.helpers import fmt_currency, fmt_pct, signal_color, signal_emoji
 
 
+def _position_status(position: dict) -> str:
+    """Return a plain-English status string for an open position."""
+    if position.get("at_stop"):
+        return "⚠️ AT STOP — Consider Selling"
+    if position.get("at_target_1"):
+        return "💰 TARGET HIT — Consider Taking Profits"
+    return "✅ Active"
+
+
 def screener_table(signals: list[dict]) -> None:
     """
     Render an interactive screener table with color-coded signals.
@@ -91,7 +100,7 @@ def positions_table(positions: list[dict]) -> None:
                 "Return %": fmt_pct(pnl_pct),
                 "Stop Loss": fmt_currency(p["stop_loss"]),
                 "Target 1": fmt_currency(p.get("target_1")),
-                "Status": "⚠️ AT STOP — Consider Selling" if p.get("at_stop") else ("💰 TARGET HIT — Consider Taking Profits" if p.get("at_target_1") else "✅ Active"),
+                "Status": _position_status(p),
             }
         )
 
