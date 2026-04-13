@@ -35,8 +35,7 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # Session state defaults
 # ---------------------------------------------------------------------------
-if "dark_mode" not in st.session_state:
-    st.session_state["dark_mode"] = False
+st.session_state["dark_mode"] = True
 if "account_size" not in st.session_state:
     from config.settings import ACCOUNT_SIZE
     st.session_state["account_size"] = ACCOUNT_SIZE
@@ -56,12 +55,6 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.markdown("---")
-
-    # Dark/Light mode toggle
-    dark = st.toggle("🌙 Dark Mode", value=st.session_state["dark_mode"], key="_dm_toggle")
-    if dark != st.session_state["dark_mode"]:
-        st.session_state["dark_mode"] = dark
-        st.rerun()
 
     # Color-blind mode
     cb_mode = st.toggle(

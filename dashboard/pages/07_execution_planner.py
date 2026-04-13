@@ -128,7 +128,7 @@ rr = signal.get("rr_ratio")
 
 st.markdown(
     f"""
-    <div style="background:#161b22;border:2px solid {color};border-radius:12px;
+    <div style="background:#1E293B;border:2px solid {color};border-radius:12px;
                 padding:20px;margin-bottom:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
@@ -138,9 +138,9 @@ st.markdown(
             {signal_emoji(sig_val)} {sig_val}
           </span>
         </div>
-        <div style="text-align:right;color:#8b949e;">
-          Score: <b style="color:#c9d1d9;">{signal.get('composite_score', 0):.0f}/100</b>
-          &nbsp;|&nbsp; Sector: <b style="color:#c9d1d9;">{signal.get('sector', 'N/A')}</b>
+        <div style="text-align:right;color:#94A3B8;">
+          Score: <b style="color:#F1F5F9;">{signal.get('composite_score', 0):.0f}/100</b>
+          &nbsp;|&nbsp; Sector: <b style="color:#F1F5F9;">{signal.get('sector', 'N/A')}</b>
         </div>
       </div>
     </div>
@@ -202,9 +202,9 @@ if entry and stop and t1:
     fig.update_layout(
         height=180,
         showlegend=False,
-        paper_bgcolor="#0d1117",
-        plot_bgcolor="#0d1117",
-        font=dict(color="#c9d1d9"),
+        paper_bgcolor="#0F172A",
+        plot_bgcolor="#0F172A",
+        font=dict(color="#F1F5F9"),
         xaxis=dict(showgrid=False, title="Price ($)"),
         yaxis=dict(visible=False),
         margin=dict(l=10, r=10, t=30, b=20),
